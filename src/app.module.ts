@@ -4,6 +4,9 @@ import { AppService } from './app.service.js';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { BookingModule } from './booking/booking.module.js';
+import { UserModule } from './user/user.module.js';
+import { RealtimeModule } from './realtime/realtime.module.js';
+import { NotificationModule } from './notification/notification.module.js';
 
 @Module({
   imports: [
@@ -15,7 +18,10 @@ import { BookingModule } from './booking/booking.module.js';
       }),
       inject: [ConfigService],
     }),
+    UserModule,
     BookingModule,
+    RealtimeModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -19,13 +19,26 @@ export type NotificationLogDocument = HydratedDocument<NotificationLog>;
 @Schema({ timestamps: true })
 export class NotificationLog {
   /**
-   * Indexed for fast querying to find all notifications sent to a specific user.
+   * For Drivers and Admins, this holds the User ID.
+   * For guest Passengers, this is optional or stores the bookingId.
    */
-  @Prop({ required: true, index: true })
-  recipientId: string;
+  @Prop({ required: false, index: true })
+  recipientId?: string;
 
   /**
-   * Enum allows us to easily filter logs by role (e.g., "show me all failed driver notifications").
+   * Phone number destination (crucial for guest passenger SMS/WhatsApp dispatch).
+   */
+  @Prop({ required: false, index: true })
+  recipientPhone?: string;
+
+  /**
+   * Email destination (for guest receipts or admin alerts).
+   */
+  @Prop({ required: false })
+  recipientEmail?: string;
+
+  /**
+   * Enum allows us to easily filter logs by role (e.g., PASSENGER, DRIVER, ADMIN).
    */
   @Prop({ type: String, enum: RecipientRole, required: true })
   recipientRole: RecipientRole;

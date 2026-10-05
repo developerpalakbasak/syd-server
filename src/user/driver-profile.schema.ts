@@ -1,5 +1,3 @@
-// Live Location is intentionally omitted from this schema as it must be kept in a fast-store like Redis per architectural guidelines.
-
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { User } from './user.schema.js';
@@ -20,11 +18,6 @@ export enum BackgroundCheckStatus {
 
 @Schema({ timestamps: true })
 export class DriverProfile {
-  /**
-   * Using Types.ObjectId with `ref: 'User'` establishes the One-to-One link.
-   * Like the CustomerProfile, keeping driver-specific data here allows the base
-   * User collection to remain highly performant for authentication queries.
-   */
   @Prop({ type: Types.ObjectId, ref: User.name, required: true, unique: true, index: true })
   userId: Types.ObjectId;
 
@@ -39,6 +32,26 @@ export class DriverProfile {
 
   @Prop({ type: Number, default: 5.0 })
   rating: number;
+
+  @Prop({
+    type: {
+      make: { type: String },
+      model: { type: String },
+      year: { type: Number },
+      licensePlate: { type: String },
+      color: { type: String },
+      vehicleType: { type: String },
+    },
+    required: false,
+  })
+  vehicle?: {
+    make?: string;
+    model?: string;
+    year?: number;
+    licensePlate?: string;
+    color?: string;
+    vehicleType?: string;
+  };
 }
 
 export const DriverProfileSchema = SchemaFactory.createForClass(DriverProfile);

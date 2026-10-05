@@ -1,12 +1,12 @@
 import { SetMetadata } from '@nestjs/common';
+import { UserRole } from '../user/user.enums.js';
 
 export const ROLES_KEY = 'roles';
 
 /**
- * The @Roles() decorator allows us to tag route handlers with specific roles
- * required to access the endpoint. It uses NestJS's SetMetadata to attach 
- * custom metadata (the roles array) to the route's context.
+ * The @Roles() decorator tags routes with roles required to access them.
+ * Accounts are only required for DRIVER and ADMIN roles.
  * 
- * Example usage: @Roles('CUSTOMER', 'ADMIN')
+ * Example usage: @Roles(UserRole.DRIVER, UserRole.ADMIN)
  */
-export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+export const Roles = (...roles: (UserRole | string)[]) => SetMetadata(ROLES_KEY, roles);

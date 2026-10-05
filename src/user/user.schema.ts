@@ -19,10 +19,10 @@ export class User {
   passwordHash: string;
 
   /**
-   * Array of roles allows a single account to act as multiple entities 
-   * (e.g., a Driver who also uses the app as a Customer).
+   * Accounts are strictly for authenticated system users (Drivers and Admins).
+   * Customers/passengers book as guests without accounts.
    */
-  @Prop({ type: [String], enum: UserRole, default: [UserRole.CUSTOMER] })
+  @Prop({ type: [String], enum: UserRole, default: [UserRole.DRIVER] })
   roles: UserRole[];
 
   @Prop({ default: 'en' })

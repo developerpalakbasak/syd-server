@@ -30,7 +30,7 @@ export enum NotificationStatus {
 }
 
 export enum RecipientRole {
-  CUSTOMER = 'CUSTOMER',
+  PASSENGER = 'PASSENGER',
   DRIVER = 'DRIVER',
   ADMIN = 'ADMIN',
   CORPORATE = 'CORPORATE',

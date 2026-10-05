@@ -1,48 +1,90 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, Types } from 'mongoose';
 import { BookingStatus } from './booking-status.enum.js';
+import { User } from '../user/user.schema.js';
 
-// HydratedDocument represents a hydrated Mongoose document, with methods, virtuals, and other Mongoose-specific features.
 export type BookingDocument = HydratedDocument<Booking>;
 
-/**
- * @Schema decorator marks the class as a Mongoose schema definition.
- * We pass { timestamps: true } to automatically add createdAt and updatedAt fields.
- */
 @Schema({ timestamps: true })
 export class Booking {
-  /**
-   * @Prop decorator defines a property in the document.
-   * We set enum to enforce valid values and index: true to improve query performance on this field, 
-   * which is crucial for State Machine logic where we often query by state (e.g., finding all REQUESTED bookings).
-   */
   @Prop({ type: String, enum: BookingStatus, default: BookingStatus.REQUESTED, index: true })
   status: BookingStatus;
 
   /**
-   * The customer ID must be provided. We set required: true to enforce this at the database level.
+   * Guest passenger details (no user account required to book a ride).
    */
-  @Prop({ required: true })
-  customerId: string;
+  @Prop({
+    type: {
+      name: { type: String, required: true },
+      phone: { type: String, required: true, index: true },
+      email: { type: String },
+    },
+    required: true,
+  })
+  passenger: {
+    name: string;
+    phone: string;
+    email?: string;
+  };
 
   /**
-   * driverId is optional because a booking starts in REQUESTED state without a driver.
-   * No additional options are strictly needed here.
+   * Pickup address and GeoJSON coordinates [longitude, latitude].
    */
-  @Prop()
-  driverId?: string;
+  @Prop({
+    type: {
+      address: { type: String, required: true },
+      coordinates: { type: [Number], required: true },
+    },
+    required: true,
+  })
+  pickupLocation: {
+    address: string;
+    coordinates: number[];
+  };
 
   /**
-   * idempotencyKey prevents processing the same action (like a payment or status change) multiple times.
-   * We set unique: true to ensure no two documents can have the same idempotency key.
+   * Dropoff destination address and GeoJSON coordinates [longitude, latitude].
+   */
+  @Prop({
+    type: {
+      address: { type: String, required: true },
+      coordinates: { type: [Number], required: true },
+    },
+    required: true,
+  })
+  dropoffLocation: {
+    address: string;
+    coordinates: number[];
+  };
+
+  /**
+   * Assigned driver (references User account of role DRIVER).
+   */
+  @Prop({ type: Types.ObjectId, ref: User.name, index: true })
+  driverId?: Types.ObjectId;
+
+  /**
+   * Secure, random tracking token generated on booking creation.
+   * Enables the guest passenger to track, view, and manage their ride without logging in.
+   */
+  @Prop({ required: true, unique: true, index: true })
+  trackingToken: string;
+
+  /**
+   * Idempotency key prevents duplicate booking creation requests.
    */
   @Prop({ required: true, unique: true })
   idempotencyKey: string;
 
-  /**
-   * For nested objects that don't need their own distinct collection or full schema features,
-   * we can use a raw nested object type in @Prop by specifying type: Object or defining the shape.
-   */
+  @Prop({ type: String })
+  vehicleType?: string;
+
+  @Prop({ type: Number })
+  estimatedFare?: number;
+
+  @Prop({ type: Number })
+  finalFare?: number;
+
   @Prop({
     type: {
       cancelledBy: { type: String },
@@ -51,7 +93,6 @@ export class Booking {
       feeAmount: { type: Number },
       refundAmount: { type: Number },
     },
-    // Required is false by default. We only populate this if the booking is cancelled.
     required: false,
   })
   cancellationDetails?: {
@@ -63,5 +104,5 @@ export class Booking {
   };
 }
 
-// SchemaFactory generates the Mongoose Schema object based on the decorators we used above.
 export const BookingSchema = SchemaFactory.createForClass(Booking);
+

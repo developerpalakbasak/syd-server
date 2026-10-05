@@ -9,51 +9,85 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 
-/**
- * @WebSocketGateway sets up a Socket.io server instance attached to the NestJS app.
- * cors: true allows cross-origin requests, typical for web/mobile client connections.
- */
 @WebSocketGateway({ cors: true, namespace: '/realtime' })
 export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
   handleConnection(client: Socket) {
-    console.log(`Client connected: ${client.id}`);
-    // Typical logic here: authenticate connection via JWT token passed in headers/query,
-    // and then join the socket to specific "rooms" based on their userId or bookingId.
+    console.log(`Realtime client connected: ${client.id}`);
   }
 
   handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
-    // Clean up connections if necessary
+    console.log(`Realtime client disconnected: ${client.id}`);
   }
 
   /**
-   * Listens for high-frequency GPS updates from the driver's app.
+   * Guest passengers join the booking room using their tracking token (no user account needed).
+   */
+  @SubscribeMessage('join.tracking')
+  async handleJoinTracking(
+    @MessageBody() data: { bookingId: string; trackingToken: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (data?.bookingId) {
+      await client.join(`booking_${data.bookingId}`);
+      client.emit('tracking.joined', {
+        success: true,
+        bookingId: data.bookingId,
+        message: 'Successfully subscribed to booking live updates',
+      });
+    }
+  }
+
+  /**
+   * Authenticated drivers join their dedicated driver room.
+   */
+  @SubscribeMessage('join.driver')
+  async handleJoinDriver(
+    @MessageBody() data: { driverId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    if (data?.driverId) {
+      await client.join(`driver_${data.driverId}`);
+      client.emit('driver.joined', { success: true, driverId: data.driverId });
+    }
+  }
+
+  /**
+   * Drivers stream their real-time GPS coordinates.
+   * Server forwards this directly to the guest passenger in room `booking_${bookingId}`.
    */
   @SubscribeMessage('driver.location')
-  handleDriverLocation(@MessageBody() data: any, @ConnectedSocket() client: Socket) {
-    // Log the driver's location update for auditing or debugging.
-    console.log(`Received location from driver:`, data);
-    
-    // ARCHITECTURE NOTE:
-    // To broadcast this to the specific customer, you would typically:
-    // 1. Identify which active booking this driver is currently servicing.
-    // 2. Emit the location data to a specific "Room".
-    // Example: this.server.to(`booking_${data.bookingId}`).emit('location.update', data.coordinates);
-    // The customer app would have already joined `booking_${data.bookingId}` upon confirming the ride.
+  handleDriverLocation(
+    @MessageBody()
+    data: {
+      bookingId: string;
+      coordinates: [number, number]; // [longitude, latitude]
+      heading?: number;
+      speed?: number;
+    },
+    @ConnectedSocket() _client: Socket,
+  ) {
+    if (data?.bookingId && data?.coordinates) {
+      this.server.to(`booking_${data.bookingId}`).emit('location.update', {
+        bookingId: data.bookingId,
+        coordinates: data.coordinates,
+        heading: data.heading,
+        speed: data.speed,
+        timestamp: new Date(),
+      });
+    }
   }
 
   /**
-   * Helper function that the rest of the NestJS application (like BookingService)
-   * can call to push status updates to connected clients in real-time.
+   * Helper function to broadcast booking state changes to connected guests and drivers.
    */
-  broadcastBookingStatusChange(bookingId: string, status: string, payload: any) {
-    // Pushes the 'booking.status_changed' event to anyone subscribed to this booking's room.
+  broadcastBookingStatusChange(bookingId: string, status: string, payload?: Record<string, any>) {
     this.server.to(`booking_${bookingId}`).emit('booking.status_changed', {
       bookingId,
       status,
+      timestamp: new Date(),
       ...payload,
     });
   }
