@@ -10,6 +10,11 @@ import { CreatePlaceDto } from './dto/create-place.dto.js';
 import { UpdatePlaceDto } from './dto/update-place.dto.js';
 import { QueryPlaceDto } from './dto/query-place.dto.js';
 
+// Helper to safely escape regex characters including parentheses, dots, brackets
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 // Service managing admin place route fares, lookups, and seeding.
 @Injectable()
 export class PlacesService {
@@ -28,7 +33,7 @@ export class PlacesService {
     }
 
     if (query?.search) {
-      const searchRegex = new RegExp(query.search.trim(), 'i');
+      const searchRegex = new RegExp(escapeRegex(query.search.trim()), 'i');
       filter.$or = [
         { firstPlace: searchRegex },
         { lastPlace: searchRegex },
@@ -36,10 +41,10 @@ export class PlacesService {
       ];
     } else {
       if (query?.firstPlace) {
-        filter.firstPlace = new RegExp(query.firstPlace.trim(), 'i');
+        filter.firstPlace = new RegExp(escapeRegex(query.firstPlace.trim()), 'i');
       }
       if (query?.lastPlace) {
-        filter.lastPlace = new RegExp(query.lastPlace.trim(), 'i');
+        filter.lastPlace = new RegExp(escapeRegex(query.lastPlace.trim()), 'i');
       }
     }
 
@@ -71,23 +76,71 @@ export class PlacesService {
     };
   }
 
-  // Looks up route fare by firstPlace and lastPlace (case-insensitive)
-  async findByRoute(firstPlace: string, lastPlace: string): Promise<PlaceDocument> {
+  // Looks up route fare by firstPlace and lastPlace (case-insensitive, bidirectional & fuzzy fallback)
+  async findByRoute(firstPlace?: string, lastPlace?: string): Promise<PlaceDocument> {
     if (!firstPlace || !lastPlace) {
-      throw new BadRequestException('Both firstPlace and lastPlace are required for lookup');
+      throw new BadRequestException(
+        'Both pickup and destination locations are required (e.g. ?firstPlace=...&lastPlace=... or ?from=...&to=...)',
+      );
     }
 
-    const route = await this.placeModel
+    const originClean = firstPlace.trim();
+    const destClean = lastPlace.trim();
+    const originEscaped = escapeRegex(originClean);
+    const destEscaped = escapeRegex(destClean);
+
+    // 1. Exact match (case-insensitive, escaped regex)
+    let route = await this.placeModel
       .findOne({
-        firstPlace: new RegExp(`^${firstPlace.trim()}$`, 'i'),
-        lastPlace: new RegExp(`^${lastPlace.trim()}$`, 'i'),
+        firstPlace: new RegExp(`^${originEscaped}$`, 'i'),
+        lastPlace: new RegExp(`^${destEscaped}$`, 'i'),
         isActive: true,
       })
       .exec();
 
+    // 2. Reverse direction exact match
     if (!route) {
+      route = await this.placeModel
+        .findOne({
+          firstPlace: new RegExp(`^${destEscaped}$`, 'i'),
+          lastPlace: new RegExp(`^${originEscaped}$`, 'i'),
+          isActive: true,
+        })
+        .exec();
+    }
+
+    // 3. Partial substring match (e.g. "Sydney Airport" matching "Sydney Airport (SYD)")
+    if (!route) {
+      route = await this.placeModel
+        .findOne({
+          firstPlace: new RegExp(originEscaped, 'i'),
+          lastPlace: new RegExp(destEscaped, 'i'),
+          isActive: true,
+        })
+        .exec();
+    }
+
+    // 4. Reverse partial substring match
+    if (!route) {
+      route = await this.placeModel
+        .findOne({
+          firstPlace: new RegExp(destEscaped, 'i'),
+          lastPlace: new RegExp(originEscaped, 'i'),
+          isActive: true,
+        })
+        .exec();
+    }
+
+    if (!route) {
+      const totalCount = await this.placeModel.countDocuments().exec();
+      if (totalCount === 0) {
+        throw new NotFoundException(
+          'No routes found in the database. Please seed default routes first via POST /api/v1/places/seed or create a route via POST /api/v1/places',
+        );
+      }
+
       throw new NotFoundException(
-        `Fare route from '${firstPlace}' to '${lastPlace}' not found`,
+        `Fare route between '${firstPlace}' and '${lastPlace}' not found. Please check location names or use GET /api/v1/places to view available routes.`,
       );
     }
 
@@ -154,7 +207,7 @@ export class PlacesService {
     }
 
     const updated = await this.placeModel
-      .findByIdAndUpdate(id, updateData, { new: true })
+      .findByIdAndUpdate(id, updateData, { returnDocument: 'after' })
       .exec();
 
     if (!updated) {
@@ -292,7 +345,7 @@ export class PlacesService {
           lastPlace: route.lastPlace,
         },
         { $set: route },
-        { upsert: true, new: true },
+        { upsert: true, returnDocument: 'after' },
       );
       results.push(updated);
     }

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
@@ -12,7 +13,7 @@ import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
 
 // Service managing booking creation, queries, status transitions, and reference generation.
 @Injectable()
-export class BookingsService {
+export class BookingsService implements OnModuleInit {
   // Injects Mongoose Models for Booking and Vehicle collections.
   constructor(
     @InjectModel(Booking.name)
@@ -20,6 +21,15 @@ export class BookingsService {
     @InjectModel(Vehicle.name)
     private readonly vehicleModel: Model<VehicleDocument>,
   ) {}
+
+  // Synchronizes MongoDB indexes with the current schema, dropping any obsolete indexes.
+  async onModuleInit() {
+    try {
+      await this.bookingModel.syncIndexes();
+    } catch {
+      // Ignore if collection does not exist yet
+    }
+  }
 
   // Generates a random uppercase 6-character alphanumeric reference code formatted as SYD-XXXXXX.
   private generateBookingNumber(): string {

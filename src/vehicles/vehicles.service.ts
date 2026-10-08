@@ -73,7 +73,7 @@ export class VehiclesService {
       updateData.slug = dto.slug.toLowerCase();
     }
     const updated = await this.vehicleModel
-      .findByIdAndUpdate(id, updateData, { new: true })
+      .findByIdAndUpdate(id, updateData, { returnDocument: 'after' })
       .exec();
 
     if (!updated) {

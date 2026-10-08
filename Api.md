@@ -9,6 +9,10 @@ Comprehensive API reference and manual testing guide for the **SYD Server** back
 ---
 
 ## Table of Contents
+0. [Root & System Health Test Endpoints (`/`)](#0-root--system-health-test-endpoints-)
+   - [API Root Status](#01-api-root-status)
+   - [API Test Route](#02-api-test-route)
+   - [Health Check](#03-health-check)
 1. [Places & Route Fares (`/places`)](#1-places--route-fares-places)
    - [Seed Default Route Fares](#11-seed-default-route-fares)
    - [List All Route Fares](#12-list-all-route-fares)
@@ -30,6 +34,59 @@ Comprehensive API reference and manual testing guide for the **SYD Server** back
    - [Lookup Booking by Reference or ID](#33-lookup-booking-by-reference-or-id)
    - [Update Booking Status](#34-update-booking-status)
    - [Cancel Booking](#35-cancel-booking)
+
+---
+
+## 0. Root & System Health Test Endpoints (`/`)
+
+Basic test routes for pinging server status and validating API prefix connectivity.
+
+### 0.1 API Root Status
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1`
+```bash
+curl -X GET http://localhost:4000/api/v1
+```
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "SYD Server API is active and operational",
+  "version": "1.0.0",
+  "timestamp": "2026-10-08T09:00:00.000Z"
+}
+```
+
+### 0.2 API Test Route
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/test`
+```bash
+curl -X GET http://localhost:4000/api/v1/test
+```
+**Response (`200 OK`):**
+```json
+{
+  "success": true,
+  "message": "Test API route is working successfully!",
+  "timestamp": "2026-10-08T09:00:00.000Z",
+  "uptime": 124.5
+}
+```
+
+### 0.3 Health Check
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/health`
+```bash
+curl -X GET http://localhost:4000/api/v1/health
+```
+**Response (`200 OK`):**
+```json
+{
+  "status": "ok",
+  "uptime": 124.5,
+  "timestamp": "2026-10-08T09:00:00.000Z"
+}
+```
 
 ---
 
@@ -141,17 +198,29 @@ curl -X GET "http://localhost:4000/api/v1/places?limit=10"
 ---
 
 ### 1.3 Lookup Fare by `firstPlace` & `lastPlace`
-Performs a case-insensitive route lookup for quick price checks between pickup and destination.
+Performs a case-insensitive route lookup for quick price checks between pickup and destination. Supports exact matches, reverse direction, and partial name matching.
+
+> **Note:** If testing on a fresh database, call `POST /api/v1/places/seed` first to populate the default routes!
 
 - **Method:** `GET`
-- **URL:** `http://localhost:4000/api/v1/places/lookup?firstPlace=Sydney Airport (SYD)&lastPlace=Sydney CBD`
-- **Query Parameters (Required):**
-  - `firstPlace`: name of the pickup location
-  - `lastPlace`: name of the destination location
+- **URL (URL-Encoded for browser/Postman):**
+  `http://localhost:4000/api/v1/places/lookup?firstPlace=Sydney%20Airport%20(SYD)&lastPlace=Sydney%20CBD`
+- **URL (Alternative query aliases):**
+  `http://localhost:4000/api/v1/places/lookup?from=Sydney%20Airport&to=Sydney%20CBD`
+- **URL (Path parameter alternative):**
+  `http://localhost:4000/api/v1/places/route/Sydney%20Airport%20(SYD)/Sydney%20CBD`
+- **Query Parameters:**
+  - `firstPlace` (or `from` / `pickup`): name of the pickup location
+  - `lastPlace` (or `to` / `destination`): name of the destination location
 
-#### cURL
+#### cURL (Query Parameters)
 ```bash
 curl -X GET "http://localhost:4000/api/v1/places/lookup?firstPlace=Sydney%20Airport%20(SYD)&lastPlace=Sydney%20CBD"
+```
+
+#### cURL (Using `from` and `to` aliases with partial names)
+```bash
+curl -X GET "http://localhost:4000/api/v1/places/lookup?from=Sydney%20Airport&to=Sydney%20CBD"
 ```
 
 #### Expected Response (`200 OK`)

@@ -34,8 +34,27 @@ export class PlacesController {
   // GET /api/v1/places/lookup?firstPlace=...&lastPlace=... - Looks up fare for a specific route.
   @Get('lookup')
   async lookup(
-    @Query('firstPlace') firstPlace: string,
-    @Query('lastPlace') lastPlace: string,
+    @Query('firstPlace') firstPlace?: string,
+    @Query('lastPlace') lastPlace?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('pickup') pickup?: string,
+    @Query('destination') destination?: string,
+  ) {
+    const origin = firstPlace || from || pickup;
+    const dest = lastPlace || to || destination;
+    const place = await this.placesService.findByRoute(origin, dest);
+    return {
+      success: true,
+      place,
+    };
+  }
+
+  // GET /api/v1/places/route/:firstPlace/:lastPlace - Path parameter lookup alternative
+  @Get('route/:firstPlace/:lastPlace')
+  async lookupByPath(
+    @Param('firstPlace') firstPlace: string,
+    @Param('lastPlace') lastPlace: string,
   ) {
     const place = await this.placesService.findByRoute(firstPlace, lastPlace);
     return {

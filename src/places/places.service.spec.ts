@@ -67,4 +67,17 @@ describe('PlacesService', () => {
     const result = await service.findByRoute('Sydney Airport (SYD)', 'Sydney CBD');
     expect(result).toEqual(mockRoute);
   });
+
+  it('should throw NotFoundException if route is not found and database has places', async () => {
+    mockPlaceModel.exec
+      .mockResolvedValueOnce(null) // exact
+      .mockResolvedValueOnce(null) // reverse
+      .mockResolvedValueOnce(null) // partial
+      .mockResolvedValueOnce(null) // reverse partial
+      .mockResolvedValueOnce(5); // countDocuments
+
+    await expect(
+      service.findByRoute('Nowhere', 'Somewhere'),
+    ).rejects.toThrow();
+  });
 });
