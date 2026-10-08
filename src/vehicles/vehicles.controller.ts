@@ -13,10 +13,13 @@ import { VehiclesService } from './vehicles.service.js';
 import { CreateVehicleDto } from './dto/create-vehicle.dto.js';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
 
+// Controller handling vehicle fleet catalog endpoints and operations.
 @Controller('vehicles')
 export class VehiclesController {
+  // Injects VehiclesService dependency for fleet database operations.
   constructor(private readonly vehiclesService: VehiclesService) {}
 
+  // GET /api/v1/vehicles - Retrieves all vehicles matching optional service, passenger, and active status filters.
   @Get()
   async findAll(
     @Query('service') service?: string,
@@ -33,11 +36,13 @@ export class VehiclesController {
     return { success: true, count: vehicles.length, vehicles };
   }
 
+  // POST /api/v1/vehicles/seed - Seeds predefined default fleet vehicles into the database.
   @Post('seed')
   async seed() {
     return this.vehiclesService.seedDefaultVehicles();
   }
 
+  // GET /api/v1/vehicles/:idOrSlug - Retrieves a single vehicle by either MongoDB ObjectId or URL slug.
   @Get(':idOrSlug')
   async findOne(@Param('idOrSlug') idOrSlug: string) {
     if (isValidObjectId(idOrSlug)) {
@@ -48,12 +53,14 @@ export class VehiclesController {
     return { success: true, vehicle };
   }
 
+  // POST /api/v1/vehicles - Creates and registers a new vehicle in the fleet catalog.
   @Post()
   async create(@Body() createVehicleDto: CreateVehicleDto) {
     const vehicle = await this.vehiclesService.create(createVehicleDto);
     return { success: true, message: 'Vehicle created successfully', vehicle };
   }
 
+  // PATCH /api/v1/vehicles/:id - Updates details of an existing vehicle by ID.
   @Patch(':id')
   async update(
     @Param('id') id: string,
@@ -63,6 +70,7 @@ export class VehiclesController {
     return { success: true, message: 'Vehicle updated successfully', vehicle };
   }
 
+  // DELETE /api/v1/vehicles/:id - Deletes a vehicle from the fleet catalog by ID.
   @Delete(':id')
   async remove(@Param('id') id: string) {
     return this.vehiclesService.remove(id);

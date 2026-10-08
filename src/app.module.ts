@@ -3,7 +3,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { VehiclesModule } from './vehicles/vehicles.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { PlacesModule } from './places/places.module.js';
+import { AppController } from './app.controller.js';
+import { AppService } from './app.service.js';
 
+// Root application module configuring global environment variables, MongoDB database connection, and feature modules.
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -19,6 +23,9 @@ import { BookingsModule } from './bookings/bookings.module.js';
     }),
     VehiclesModule,
     BookingsModule,
+    PlacesModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

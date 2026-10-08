@@ -13,14 +13,13 @@ import { BookingsService } from './bookings.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
 
+// Controller handling public guest bookings, lookups, status updates, and cancellations.
 @Controller('bookings')
 export class BookingsController {
+  // Injects BookingsService dependency for booking business logic and storage.
   constructor(private readonly bookingsService: BookingsService) {}
 
-  /**
-   * Guest Booking Creation (No authentication required)
-   * Receives: from, to, date-time / isNow, passenger count, vehicle type, and passenger contact details.
-   */
+  // POST /api/v1/bookings - Creates a guest booking without requiring authentication.
   @Post()
   @HttpCode(HttpStatus.CREATED)
   async create(@Body() createBookingDto: CreateBookingDto) {
@@ -47,9 +46,7 @@ export class BookingsController {
     };
   }
 
-  /**
-   * List bookings (supports filtering by phone, status, service)
-   */
+  // GET /api/v1/bookings - Lists paginated bookings filtered by phone, status, or service category.
   @Get()
   async findAll(
     @Query('phone') phone?: string,
@@ -68,18 +65,14 @@ export class BookingsController {
     return { success: true, ...data };
   }
 
-  /**
-   * Look up booking by reference number (e.g. SYD-ABC123) or MongoDB ID
-   */
+  // GET /api/v1/bookings/:refOrId - Looks up booking by human-readable reference (SYD-XXXXXX) or MongoDB ObjectId.
   @Get(':refOrId')
   async findOne(@Param('refOrId') refOrId: string) {
     const booking = await this.bookingsService.findByReferenceOrId(refOrId);
     return { success: true, booking };
   }
 
-  /**
-   * Update booking status or payment status
-   */
+  // PATCH /api/v1/bookings/:refOrId/status - Updates booking lifecycle status, payment status, or internal notes.
   @Patch(':refOrId/status')
   async updateStatus(
     @Param('refOrId') refOrId: string,
@@ -93,9 +86,7 @@ export class BookingsController {
     };
   }
 
-  /**
-   * Cancel booking
-   */
+  // POST /api/v1/bookings/:refOrId/cancel - Cancels a booking and records an optional cancellation reason.
   @Post(':refOrId/cancel')
   async cancel(
     @Param('refOrId') refOrId: string,

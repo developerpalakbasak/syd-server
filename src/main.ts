@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module.js';
 
+// Bootstraps and launches the NestJS application with CORS, global validation, and configured port.
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({

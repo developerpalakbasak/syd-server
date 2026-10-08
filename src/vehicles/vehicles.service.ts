@@ -5,13 +5,16 @@ import { Vehicle, VehicleDocument } from './schemas/vehicle.schema.js';
 import { CreateVehicleDto } from './dto/create-vehicle.dto.js';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto.js';
 
+// Service managing database operations, queries, and seeding for vehicle fleet records.
 @Injectable()
 export class VehiclesService {
+  // Injects Mongoose Model for Vehicle entity.
   constructor(
     @InjectModel(Vehicle.name)
     private readonly vehicleModel: Model<VehicleDocument>,
   ) {}
 
+  // Retrieves vehicles from MongoDB matching optional service category, passenger capacity, and active status.
   async findAll(query?: {
     service?: string;
     pax?: number;
@@ -36,6 +39,7 @@ export class VehiclesService {
     return this.vehicleModel.find(filter).sort({ sortOrder: 1, basePrice: 1 }).exec();
   }
 
+  // Finds a single vehicle by its unique slug, throwing NotFoundException if absent.
   async findBySlug(slug: string): Promise<VehicleDocument> {
     const vehicle = await this.vehicleModel.findOne({ slug: slug.toLowerCase() }).exec();
     if (!vehicle) {
@@ -44,6 +48,7 @@ export class VehiclesService {
     return vehicle;
   }
 
+  // Finds a single vehicle by MongoDB ObjectId, throwing NotFoundException if absent.
   async findById(id: string): Promise<VehicleDocument> {
     const vehicle = await this.vehicleModel.findById(id).exec();
     if (!vehicle) {
@@ -52,6 +57,7 @@ export class VehiclesService {
     return vehicle;
   }
 
+  // Creates and persists a new vehicle document with a normalized lowercase slug.
   async create(dto: CreateVehicleDto): Promise<Vehicle> {
     const payload = Object.assign({}, dto, {
       slug: dto.slug.toLowerCase(),
@@ -60,6 +66,7 @@ export class VehiclesService {
     return created.save();
   }
 
+  // Updates an existing vehicle record by ID and returns the updated document.
   async update(id: string, dto: UpdateVehicleDto): Promise<Vehicle> {
     const updateData: Record<string, any> = Object.assign({}, dto);
     if (dto.slug) {
@@ -75,6 +82,7 @@ export class VehiclesService {
     return updated;
   }
 
+  // Deletes a vehicle document from MongoDB by ID.
   async remove(id: string): Promise<{ success: boolean; message: string }> {
     const deleted = await this.vehicleModel.findByIdAndDelete(id).exec();
     if (!deleted) {
@@ -83,6 +91,7 @@ export class VehiclesService {
     return { success: true, message: `Vehicle ${id} deleted successfully` };
   }
 
+  // Upserts predefined fleet specifications (Taxi, Executive, Luxury, SUV, MPV, Van) into MongoDB.
   async seedDefaultVehicles(): Promise<{ count: number; vehicles: Vehicle[] }> {
     const defaults = [
       {

@@ -10,8 +10,10 @@ import { Vehicle, VehicleDocument } from '../vehicles/schemas/vehicle.schema.js'
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
 
+// Service managing booking creation, queries, status transitions, and reference generation.
 @Injectable()
 export class BookingsService {
+  // Injects Mongoose Models for Booking and Vehicle collections.
   constructor(
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<BookingDocument>,
@@ -19,6 +21,7 @@ export class BookingsService {
     private readonly vehicleModel: Model<VehicleDocument>,
   ) {}
 
+  // Generates a random uppercase 6-character alphanumeric reference code formatted as SYD-XXXXXX.
   private generateBookingNumber(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
@@ -28,6 +31,7 @@ export class BookingsService {
     return `SYD-${code}`;
   }
 
+  // Validates request data, resolves vehicle details, generates reference code, and creates guest booking.
   async create(dto: CreateBookingDto): Promise<BookingDocument> {
     // 1. Resolve Pickup and Destination (supporting HeroBookingForm aliases)
     const pickup = dto.pickup ?? dto.from;
@@ -130,6 +134,7 @@ export class BookingsService {
     return newBooking.save();
   }
 
+  // Retrieves paginated list of bookings with optional filtering by phone, status, and service.
   async findAll(query?: {
     service?: string;
     status?: string;
@@ -160,6 +165,7 @@ export class BookingsService {
     return { total, bookings };
   }
 
+  // Finds booking by MongoDB ObjectId or reference number, populating vehicle relations.
   async findByReferenceOrId(refOrId: string): Promise<BookingDocument> {
     let booking: BookingDocument | null = null;
     if (isValidObjectId(refOrId)) {
@@ -179,6 +185,7 @@ export class BookingsService {
     return booking;
   }
 
+  // Updates booking lifecycle status, payment status, cancellation reasons, or notes.
   async updateStatus(
     refOrId: string,
     dto: UpdateBookingStatusDto,
@@ -193,6 +200,7 @@ export class BookingsService {
     return booking.save();
   }
 
+  // Cancels a booking by reference or ID and stores optional cancellation reason.
   async cancel(refOrId: string, reason?: string): Promise<BookingDocument> {
     const booking = await this.findByReferenceOrId(refOrId);
     booking.status = 'cancelled';

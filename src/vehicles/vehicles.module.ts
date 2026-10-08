@@ -4,6 +4,7 @@ import { Vehicle, VehicleSchema } from './schemas/vehicle.schema.js';
 import { VehiclesService } from './vehicles.service.js';
 import { VehiclesController } from './vehicles.controller.js';
 
+// Module bundling vehicle schema registration, controller endpoints, and service provider.
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Vehicle.name, schema: VehicleSchema }]),
