@@ -15,6 +15,15 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Interface for unique place details with optional coordinates and code
+export interface UniquePlaceDetail {
+  name: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  code?: string;
+}
+
 // Service managing admin place route fares, lookups, and seeding.
 @Injectable()
 export class PlacesService {
@@ -23,6 +32,130 @@ export class PlacesService {
     @InjectModel(Place.name)
     private readonly placeModel: Model<PlaceDocument>,
   ) {}
+
+  // Retrieves a unique deduplicated list of all place names from firstPlace and lastPlace.
+  // Guarantees each place appears exactly once in the returned array.
+  async getAllUniquePlaces(options?: {
+    isActive?: boolean;
+    search?: string;
+  }): Promise<string[]> {
+    const filter: Record<string, any> = {};
+    if (options?.isActive !== undefined) {
+      filter.isActive = options.isActive;
+    }
+
+    const [firstPlaces, lastPlaces] = await Promise.all([
+      this.placeModel.distinct('firstPlace', filter).exec(),
+      this.placeModel.distinct('lastPlace', filter).exec(),
+    ]);
+
+    const uniqueMap = new Map<string, string>();
+    for (const place of [...(firstPlaces || []), ...(lastPlaces || [])]) {
+      if (typeof place === 'string') {
+        const trimmed = place.trim();
+        if (trimmed.length > 0) {
+          const lowerKey = trimmed.toLowerCase();
+          if (!uniqueMap.has(lowerKey)) {
+            uniqueMap.set(lowerKey, trimmed);
+          }
+        }
+      }
+    }
+
+    let places = Array.from(uniqueMap.values()).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base' }),
+    );
+
+    if (options?.search) {
+      const searchLower = options.search.trim().toLowerCase();
+      places = places.filter((p) => p.toLowerCase().includes(searchLower));
+    }
+
+    return places;
+  }
+
+  // Retrieves unique places with address, coordinates, and codes from firstPlace and lastPlace metadata.
+  async getAllUniquePlacesWithDetails(options?: {
+    isActive?: boolean;
+    search?: string;
+  }): Promise<UniquePlaceDetail[]> {
+    const filter: Record<string, any> = {};
+    if (options?.isActive !== undefined) {
+      filter.isActive = options.isActive;
+    }
+
+    const routes = await this.placeModel
+      .find(filter)
+      .select('firstPlace lastPlace firstPlaceDetails lastPlaceDetails')
+      .lean()
+      .exec();
+
+    const uniqueMap = new Map<string, UniquePlaceDetail>();
+
+    for (const route of routes as any[]) {
+      if (route.firstPlace && typeof route.firstPlace === 'string') {
+        const trimmed = route.firstPlace.trim();
+        if (trimmed) {
+          const lower = trimmed.toLowerCase();
+          const existing = uniqueMap.get(lower);
+          const details = route.firstPlaceDetails;
+          if (!existing) {
+            uniqueMap.set(lower, {
+              name: trimmed,
+              address: details?.address || '',
+              lat: details?.lat,
+              lng: details?.lng,
+              code: details?.code || '',
+            });
+          } else if (details && (!existing.address || !existing.lat || !existing.code)) {
+            if (!existing.address && details.address) existing.address = details.address;
+            if (existing.lat === undefined && details.lat !== undefined) existing.lat = details.lat;
+            if (existing.lng === undefined && details.lng !== undefined) existing.lng = details.lng;
+            if (!existing.code && details.code) existing.code = details.code;
+          }
+        }
+      }
+
+      if (route.lastPlace && typeof route.lastPlace === 'string') {
+        const trimmed = route.lastPlace.trim();
+        if (trimmed) {
+          const lower = trimmed.toLowerCase();
+          const existing = uniqueMap.get(lower);
+          const details = route.lastPlaceDetails;
+          if (!existing) {
+            uniqueMap.set(lower, {
+              name: trimmed,
+              address: details?.address || '',
+              lat: details?.lat,
+              lng: details?.lng,
+              code: details?.code || '',
+            });
+          } else if (details && (!existing.address || !existing.lat || !existing.code)) {
+            if (!existing.address && details.address) existing.address = details.address;
+            if (existing.lat === undefined && details.lat !== undefined) existing.lat = details.lat;
+            if (existing.lng === undefined && details.lng !== undefined) existing.lng = details.lng;
+            if (!existing.code && details.code) existing.code = details.code;
+          }
+        }
+      }
+    }
+
+    let places = Array.from(uniqueMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+    );
+
+    if (options?.search) {
+      const searchLower = options.search.trim().toLowerCase();
+      places = places.filter(
+        (p) =>
+          p.name.toLowerCase().includes(searchLower) ||
+          (p.address && p.address.toLowerCase().includes(searchLower)) ||
+          (p.code && p.code.toLowerCase().includes(searchLower)),
+      );
+    }
+
+    return places;
+  }
 
   // Retrieves places with optional search, firstPlace, lastPlace, active status, and pagination.
   async findAll(query?: QueryPlaceDto) {

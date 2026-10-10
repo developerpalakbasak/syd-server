@@ -28,4 +28,12 @@ export class QueryPlaceDto {
   @IsOptional()
   @IsString()
   skip?: string;
+
+  @IsOptional()
+  @IsString()
+  unique?: string;
+
+  @IsOptional()
+  @IsString()
+  format?: string;
 }

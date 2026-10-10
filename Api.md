@@ -16,11 +16,12 @@ Comprehensive API reference and manual testing guide for the **SYD Server** back
 1. [Places & Route Fares (`/places`)](#1-places--route-fares-places)
    - [Seed Default Route Fares](#11-seed-default-route-fares)
    - [List All Route Fares](#12-list-all-route-fares)
-   - [Lookup Fare by Route](#13-lookup-fare-by-firstplace--lastplace)
-   - [Get Single Place Route by ID](#14-get-single-route-fare-by-id)
-   - [Create New Place Route Fare](#15-create-new-place-route-fare)
-   - [Update Place Route Fare](#16-update-place-route-fare)
-   - [Delete Place Route Fare](#17-delete-place-route-fare)
+   - [Get All Unique Places](#13-get-all-unique-places)
+   - [Lookup Fare by Route](#14-lookup-fare-by-firstplace--lastplace)
+   - [Get Single Place Route by ID](#15-get-single-route-fare-by-id)
+   - [Create New Place Route Fare](#16-create-new-place-route-fare)
+   - [Update Place Route Fare](#17-update-place-route-fare)
+   - [Delete Place Route Fare](#18-delete-place-route-fare)
 2. [Vehicles Fleet Catalog (`/vehicles`)](#2-vehicles-fleet-catalog-vehicles)
    - [Seed Default Vehicles](#21-seed-default-vehicles)
    - [List Vehicles](#22-list-vehicles)
@@ -197,7 +198,62 @@ curl -X GET "http://localhost:4000/api/v1/places?limit=10"
 
 ---
 
-### 1.3 Lookup Fare by `firstPlace` & `lastPlace`
+### 1.3 Get All Unique Places
+Retrieves a deduplicated array of all unique place locations extracted from both `firstPlace` and `lastPlace`. Guarantees each place appears exactly once in the returned array. Perfect for populating pickup and destination dropdowns and autocomplete lists.
+
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/places/all`
+- **Aliases:**
+  - `http://localhost:4000/api/v1/places/unique`
+  - `http://localhost:4000/api/v1/places/names`
+  - `http://localhost:4000/api/v1/places?unique=true`
+- **Query Parameters (All optional):**
+  - `search` (or `q`): Filter places matching keyword (case-insensitive substring)
+  - `isActive` (`true` | `false`): Filter places only from active routes
+  - `raw` (`true`): Returns the plain JSON string array directly instead of the response wrapper
+  - `details` (`true`): Returns places as objects with coordinates, address, and code metadata
+
+#### cURL (Basic Unique Places Array)
+```bash
+curl -X GET http://localhost:4000/api/v1/places/all
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "count": 7,
+  "places": [
+    "Bondi Beach",
+    "Chatswood",
+    "Manly",
+    "Manly Beach",
+    "Parramatta",
+    "Sydney Airport (SYD)",
+    "Sydney CBD"
+  ]
+}
+```
+
+#### cURL (Filtered by Search Term)
+```bash
+curl -X GET "http://localhost:4000/api/v1/places/all?search=Airport"
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "count": 1,
+  "places": [
+    "Sydney Airport (SYD)"
+  ]
+}
+```
+
+---
+
+### 1.4 Lookup Fare by `firstPlace` & `lastPlace`
 Performs a case-insensitive route lookup for quick price checks between pickup and destination. Supports exact matches, reverse direction, and partial name matching.
 
 > **Note:** If testing on a fresh database, call `POST /api/v1/places/seed` first to populate the default routes!
@@ -244,7 +300,7 @@ curl -X GET "http://localhost:4000/api/v1/places/lookup?from=Sydney%20Airport&to
 
 ---
 
-### 1.4 Get Single Route Fare by ID
+### 1.5 Get Single Route Fare by ID
 - **Method:** `GET`
 - **URL:** `http://localhost:4000/api/v1/places/:id`
 
@@ -271,7 +327,7 @@ curl -X GET http://localhost:4000/api/v1/places/660c1f2e9b8214a1a5b82001
 
 ---
 
-### 1.5 Create New Place Route Fare
+### 1.6 Create New Place Route Fare
 Store a new route and its fair. Both `fair` and `fare` keys are accepted and automatically synced.
 
 - **Method:** `POST`
@@ -357,7 +413,7 @@ curl -X POST http://localhost:4000/api/v1/places \
 
 ---
 
-### 1.6 Update Place Route Fare
+### 1.7 Update Place Route Fare
 Partially updates an existing route fare.
 
 - **Method:** `PATCH`
@@ -401,7 +457,7 @@ curl -X PATCH http://localhost:4000/api/v1/places/660c20a49b8214a1a5b82008 \
 
 ---
 
-### 1.7 Delete Place Route Fare
+### 1.8 Delete Place Route Fare
 - **Method:** `DELETE`
 - **URL:** `http://localhost:4000/api/v1/places/:id`
 

@@ -24,10 +24,110 @@ export class PlacesController {
   // GET /api/v1/places - Retrieves place route fares with optional filters and pagination.
   @Get()
   async findAll(@Query() query: QueryPlaceDto) {
+    if (query?.unique === 'true' || query?.format === 'names') {
+      const activeBool =
+        query?.isActive !== undefined && query.isActive !== ''
+          ? query.isActive === 'true'
+          : undefined;
+      const places = await this.placesService.getAllUniquePlaces({
+        isActive: activeBool,
+        search: query?.search,
+      });
+      return {
+        success: true,
+        count: places.length,
+        places,
+      };
+    }
+
     const data = await this.placesService.findAll(query);
     return {
       success: true,
       ...data,
+    };
+  }
+
+  // GET /api/v1/places/all - Retrieves a unique deduplicated array of all firstPlace and lastPlace names.
+  // Guarantees each place appears exactly once in the returned array.
+  // Also accessible via /places/unique, /places/names, /places/all-places
+  @Get(['all', 'names', 'unique', 'all-places'])
+  async getAllPlaces(
+    @Query('isActive') isActive?: string,
+    @Query('search') search?: string,
+    @Query('q') q?: string,
+    @Query('raw') raw?: string,
+    @Query('details') details?: string,
+  ) {
+    const activeBool =
+      isActive !== undefined && isActive !== '' ? isActive === 'true' : undefined;
+    const searchTerm = q || search;
+    const withDetails = details === 'true';
+
+    if (withDetails) {
+      const places = await this.placesService.getAllUniquePlacesWithDetails({
+        isActive: activeBool,
+        search: searchTerm,
+      });
+      if (raw === 'true') {
+        return places;
+      }
+      return {
+        success: true,
+        count: places.length,
+        places,
+      };
+    }
+
+    const places = await this.placesService.getAllUniquePlaces({
+      isActive: activeBool,
+      search: searchTerm,
+    });
+
+    if (raw === 'true') {
+      return places;
+    }
+
+    return {
+      success: true,
+      count: places.length,
+      places,
+    };
+  }
+
+  // GET /api/v1/places/search?q=... - Autocomplete search for places (used by place input dropdowns)
+  @Get('search')
+  async searchPlaces(
+    @Query('q') q?: string,
+    @Query('search') search?: string,
+    @Query('isActive') isActive?: string,
+    @Query('details') details?: string,
+  ) {
+    const searchTerm = q || search;
+    const activeBool =
+      isActive !== undefined && isActive !== '' ? isActive === 'true' : undefined;
+    const withDetails = details !== 'false';
+
+    if (withDetails) {
+      const places = await this.placesService.getAllUniquePlacesWithDetails({
+        isActive: activeBool,
+        search: searchTerm,
+      });
+      return {
+        success: true,
+        count: places.length,
+        places,
+      };
+    }
+
+    const places = await this.placesService.getAllUniquePlaces({
+      isActive: activeBool,
+      search: searchTerm,
+    });
+
+    return {
+      success: true,
+      count: places.length,
+      places,
     };
   }
 

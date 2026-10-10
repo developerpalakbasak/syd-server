@@ -18,6 +18,9 @@ describe('PlacesService', () => {
     MockPlace.findByIdAndDelete = vi.fn().mockReturnThis();
     MockPlace.findOneAndUpdate = vi.fn().mockReturnThis();
     MockPlace.countDocuments = vi.fn().mockReturnThis();
+    MockPlace.distinct = vi.fn().mockReturnThis();
+    MockPlace.select = vi.fn().mockReturnThis();
+    MockPlace.lean = vi.fn().mockReturnThis();
     MockPlace.sort = vi.fn().mockReturnThis();
     MockPlace.skip = vi.fn().mockReturnThis();
     MockPlace.limit = vi.fn().mockReturnThis();
@@ -79,5 +82,31 @@ describe('PlacesService', () => {
     await expect(
       service.findByRoute('Nowhere', 'Somewhere'),
     ).rejects.toThrow();
+  });
+
+  it('should get all unique places deduplicated from firstPlace and lastPlace', async () => {
+    // Return distinct firstPlaces and lastPlaces with overlapping values
+    mockPlaceModel.exec
+      .mockResolvedValueOnce(['Sydney Airport (SYD)', 'Sydney CBD'])
+      .mockResolvedValueOnce(['Sydney CBD', 'Bondi Beach', 'Sydney Airport (SYD)']);
+
+    const places = await service.getAllUniquePlaces();
+
+    // Every place must be returned exactly once, sorted alphabetically
+    expect(places).toEqual([
+      'Bondi Beach',
+      'Sydney Airport (SYD)',
+      'Sydney CBD',
+    ]);
+  });
+
+  it('should filter unique places by search keyword', async () => {
+    mockPlaceModel.exec
+      .mockResolvedValueOnce(['Sydney Airport (SYD)', 'Sydney CBD'])
+      .mockResolvedValueOnce(['Bondi Beach', 'Parramatta']);
+
+    const places = await service.getAllUniquePlaces({ search: 'airport' });
+
+    expect(places).toEqual(['Sydney Airport (SYD)']);
   });
 });

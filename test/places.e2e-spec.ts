@@ -50,6 +50,50 @@ describe('PlacesController (e2e)', () => {
     expect(Array.isArray(response.body.places)).toBe(true);
   });
 
+  it('GET /api/v1/places/all - should return unique deduplicated list of all firstPlace and lastPlace', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/places/all')
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(response.body.count).toBeGreaterThanOrEqual(1);
+    expect(Array.isArray(response.body.places)).toBe(true);
+
+    // Verify each place name in the returned array is unique (no duplicates)
+    const places: string[] = response.body.places;
+    const lowerPlaces = places.map((p) => p.toLowerCase());
+    const uniqueSet = new Set(lowerPlaces);
+    expect(places.length).toBe(uniqueSet.size);
+
+    // Seeded database routes contain Sydney Airport (SYD) and Sydney CBD
+    expect(places).toContain('Sydney Airport (SYD)');
+    expect(places).toContain('Sydney CBD');
+  });
+
+  it('GET /api/v1/places/unique - should also work via alias and support search', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/places/unique')
+      .query({ search: 'Airport' })
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(Array.isArray(response.body.places)).toBe(true);
+    expect(response.body.places).toContain('Sydney Airport (SYD)');
+  });
+
+  it('GET /api/v1/places?unique=true - should return unique places list via query flag', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/places')
+      .query({ unique: 'true' })
+      .expect(200);
+
+    expect(response.body.success).toBe(true);
+    expect(Array.isArray(response.body.places)).toBe(true);
+    const places: string[] = response.body.places;
+    const uniqueSet = new Set(places.map((p) => p.toLowerCase()));
+    expect(places.length).toBe(uniqueSet.size);
+  });
+
   it('GET /api/v1/places/lookup - should find route by firstPlace and lastPlace', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/v1/places/lookup')
