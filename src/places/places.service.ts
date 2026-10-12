@@ -157,6 +157,83 @@ export class PlacesService {
     return places;
   }
 
+  // Retrieves all unique destination places that have an active route connected to the given origin place.
+  async getConnectedPlaces(origin?: string, isActive = true): Promise<UniquePlaceDetail[]> {
+    if (!origin || !origin.trim()) {
+      return [];
+    }
+
+    const cleanOrigin = origin.trim();
+    const escaped = escapeRegex(cleanOrigin);
+
+    const filter: Record<string, any> = {
+      $or: [
+        { firstPlace: new RegExp(`^${escaped}$`, 'i') },
+        { lastPlace: new RegExp(`^${escaped}$`, 'i') },
+        { firstPlace: new RegExp(escaped, 'i') },
+        { lastPlace: new RegExp(escaped, 'i') },
+      ],
+    };
+
+    if (isActive !== undefined) {
+      filter.isActive = isActive;
+    }
+
+    const routes = await this.placeModel
+      .find(filter)
+      .select('firstPlace lastPlace firstPlaceDetails lastPlaceDetails fair fare currency')
+      .lean()
+      .exec();
+
+    const destinationsMap = new Map<string, UniquePlaceDetail>();
+
+    for (const route of routes as any[]) {
+      const isFirst =
+        route.firstPlace &&
+        (route.firstPlace.toLowerCase() === cleanOrigin.toLowerCase() ||
+          route.firstPlace.toLowerCase().includes(cleanOrigin.toLowerCase()));
+
+      const isLast =
+        route.lastPlace &&
+        (route.lastPlace.toLowerCase() === cleanOrigin.toLowerCase() ||
+          route.lastPlace.toLowerCase().includes(cleanOrigin.toLowerCase()));
+
+      // If origin matches firstPlace, destination is lastPlace
+      if (isFirst && route.lastPlace) {
+        const destName = route.lastPlace.trim();
+        const lower = destName.toLowerCase();
+        if (lower !== cleanOrigin.toLowerCase() && !destinationsMap.has(lower)) {
+          destinationsMap.set(lower, {
+            name: destName,
+            address: route.lastPlaceDetails?.address || '',
+            lat: route.lastPlaceDetails?.lat,
+            lng: route.lastPlaceDetails?.lng,
+            code: route.lastPlaceDetails?.code || '',
+          });
+        }
+      }
+
+      // If origin matches lastPlace, destination is firstPlace (bidirectional)
+      if (isLast && route.firstPlace) {
+        const destName = route.firstPlace.trim();
+        const lower = destName.toLowerCase();
+        if (lower !== cleanOrigin.toLowerCase() && !destinationsMap.has(lower)) {
+          destinationsMap.set(lower, {
+            name: destName,
+            address: route.firstPlaceDetails?.address || '',
+            lat: route.firstPlaceDetails?.lat,
+            lng: route.firstPlaceDetails?.lng,
+            code: route.firstPlaceDetails?.code || '',
+          });
+        }
+      }
+    }
+
+    return Array.from(destinationsMap.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+    );
+  }
+
   // Retrieves places with optional search, firstPlace, lastPlace, active status, and pagination.
   async findAll(query?: QueryPlaceDto) {
     const filter: Record<string, any> = {};
@@ -301,11 +378,15 @@ export class PlacesService {
       throw new BadRequestException('Fair (fare) amount is required and must be a number');
     }
 
+    const perPerson = dto.increaseFairPerPerson ?? dto.increaseFarePerPerson ?? 0;
+
     const payload: Partial<Place> = Object.assign({}, dto, {
       firstPlace: dto.firstPlace.trim(),
       lastPlace: dto.lastPlace.trim(),
       fair: Number(fairAmount),
       fare: Number(fairAmount),
+      increaseFairPerPerson: Number(perPerson),
+      increaseFarePerPerson: Number(perPerson),
       currency: (dto.currency ?? 'AUD').trim().toUpperCase(),
       isActive: dto.isActive !== undefined ? dto.isActive : true,
     });
@@ -333,6 +414,12 @@ export class PlacesService {
     if (fairAmount !== undefined) {
       updateData.fair = Number(fairAmount);
       updateData.fare = Number(fairAmount);
+    }
+
+    const perPerson = dto.increaseFairPerPerson ?? dto.increaseFarePerPerson;
+    if (perPerson !== undefined) {
+      updateData.increaseFairPerPerson = Number(perPerson);
+      updateData.increaseFarePerPerson = Number(perPerson);
     }
 
     if (dto.currency) {
@@ -375,6 +462,8 @@ export class PlacesService {
         lastPlace: 'Sydney CBD',
         fair: 65,
         fare: 65,
+        increaseFairPerPerson: 10,
+        increaseFarePerPerson: 10,
         currency: 'AUD',
         distanceKm: 14,
         durationMin: 25,
@@ -389,6 +478,8 @@ export class PlacesService {
         lastPlace: 'Bondi Beach',
         fair: 75,
         fare: 75,
+        increaseFairPerPerson: 10,
+        increaseFarePerPerson: 10,
         currency: 'AUD',
         distanceKm: 16,
         durationMin: 30,
@@ -403,6 +494,8 @@ export class PlacesService {
         lastPlace: 'Parramatta',
         fair: 95,
         fare: 95,
+        increaseFairPerPerson: 15,
+        increaseFarePerPerson: 15,
         currency: 'AUD',
         distanceKm: 28,
         durationMin: 40,
@@ -417,6 +510,8 @@ export class PlacesService {
         lastPlace: 'Manly',
         fair: 110,
         fare: 110,
+        increaseFairPerPerson: 15,
+        increaseFarePerPerson: 15,
         currency: 'AUD',
         distanceKm: 27,
         durationMin: 45,
@@ -431,6 +526,8 @@ export class PlacesService {
         lastPlace: 'Chatswood',
         fair: 85,
         fare: 85,
+        increaseFairPerPerson: 12,
+        increaseFarePerPerson: 12,
         currency: 'AUD',
         distanceKm: 22,
         durationMin: 35,
@@ -445,6 +542,8 @@ export class PlacesService {
         lastPlace: 'Bondi Beach',
         fair: 35,
         fare: 35,
+        increaseFairPerPerson: 8,
+        increaseFarePerPerson: 8,
         currency: 'AUD',
         distanceKm: 8,
         durationMin: 20,
@@ -459,6 +558,8 @@ export class PlacesService {
         lastPlace: 'Manly Beach',
         fair: 55,
         fare: 55,
+        increaseFairPerPerson: 10,
+        increaseFarePerPerson: 10,
         currency: 'AUD',
         distanceKm: 15,
         durationMin: 30,

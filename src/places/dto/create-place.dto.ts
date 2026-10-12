@@ -32,6 +32,16 @@ export class CreatePlaceDto {
   fare?: number;
 
   @IsOptional()
+  @IsNumber()
+  @Min(0)
+  increaseFairPerPerson?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  increaseFarePerPerson?: number;
+
+  @IsOptional()
   @IsString()
   currency?: string;
 

@@ -31,12 +31,13 @@ export class Place {
   @Prop({ required: true, trim: true, index: true })
   lastPlace: string;
 
-  // Fare amount (supporting both 'fair' and 'fare' naming conventions)
+  // Fare amount
   @Prop({ required: true, min: 0 })
-  fair: number;
+  fare: number;
 
-  @Prop({ required: false, min: 0 })
-  fare?: number;
+  // Additional fare charged per passenger (beyond 1 passenger)
+  @Prop({ type: Number, required: false, default: 0, min: 0 })
+  increaseFarePerPerson?: number;
 
   @Prop({ default: 'AUD', trim: true, uppercase: true })
   currency: string;
@@ -70,12 +71,3 @@ export const PlaceSchema = SchemaFactory.createForClass(Place);
 
 // Compound index to quickly find routes matching pickup and dropoff places
 PlaceSchema.index({ firstPlace: 1, lastPlace: 1 });
-
-// Synchronize fair and fare before save
-PlaceSchema.pre('save', function () {
-  if (this.fair !== undefined && this.fare === undefined) {
-    this.fare = this.fair;
-  } else if (this.fare !== undefined && this.fair === undefined) {
-    this.fair = this.fare;
-  }
-});

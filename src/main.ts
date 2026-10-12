@@ -17,7 +17,7 @@ async function bootstrap() {
       forbidNonWhitelisted: false,
     }),
   );
-  const port = process.env.PORT ?? 4000;
+  const port = process.env.PORT ?? 8000;
   await app.listen(port);
   console.log(`Server is running on port ${port} with prefix /api/v1`);
 }

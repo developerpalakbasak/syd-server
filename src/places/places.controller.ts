@@ -131,6 +131,27 @@ export class PlacesController {
     };
   }
 
+  // GET /api/v1/places/destinations?from=... - Retrieves all available destination places connected to a given origin place.
+  @Get('destinations')
+  async getConnectedDestinations(
+    @Query('from') from?: string,
+    @Query('pickup') pickup?: string,
+    @Query('firstPlace') firstPlace?: string,
+    @Query('origin') origin?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    const originPlace = from || pickup || firstPlace || origin;
+    const activeBool =
+      isActive !== undefined && isActive !== '' ? isActive === 'true' : true;
+    const places = await this.placesService.getConnectedPlaces(originPlace, activeBool);
+    return {
+      success: true,
+      origin: originPlace,
+      count: places.length,
+      places,
+    };
+  }
+
   // GET /api/v1/places/lookup?firstPlace=...&lastPlace=... - Looks up fare for a specific route.
   @Get('lookup')
   async lookup(
