@@ -35,6 +35,17 @@ Comprehensive API reference and manual testing guide for the **SYD Server** back
    - [Lookup Booking by Reference or ID](#33-lookup-booking-by-reference-or-id)
    - [Update Booking Status](#34-update-booking-status)
    - [Cancel Booking](#35-cancel-booking)
+4. [Administrators & Managers (`/admins`)](#4-administrators--managers-admins)
+   - [Admin Login with Cookies](#41-admin-login-with-cookies)
+   - [Admin Logout](#42-admin-logout)
+   - [Get Current Admin Profile](#43-get-current-admin-profile)
+   - [Refresh JWT Tokens](#44-refresh-jwt-tokens)
+   - [Seed Default Admin & Manager](#45-seed-default-admin--manager)
+   - [List All Administrators](#46-list-all-administrators)
+   - [Get Administrator by ID](#47-get-administrator-by-id)
+   - [Create Administrator / Manager](#48-create-administrator--manager)
+   - [Update Administrator](#49-update-administrator)
+   - [Delete Administrator](#410-delete-administrator)
 
 ---
 
@@ -1018,3 +1029,397 @@ curl -X POST http://localhost:4000/api/v1/bookings/SYD-A9K4F2/cancel \
   }
 }
 ```
+
+---
+
+## 4. Administrators & Managers (`/admins`)
+
+Management endpoints for internal administrative accounts (`admin` and `manager` roles). Password hashing uses HMAC-SHA256 with the server's `BCRYPT_SECRET` (while `JWT_SECRET` is used for cookie session tokens). Passwords are excluded from queries by default.
+
+Tokens & Cookies validity:
+- **`accessToken`** JWT validity: `ACCESS_TOKEN_VALIDITY` (default: `1d`). Cookie maxAge: `ACCESS_COOKIES_VALIDITY` in minutes (default: `15` min).
+- **`refreshToken`** JWT validity: `REFRESH_TOKEN_VALIDITY` (default: `15d`). Cookie maxAge: `REFRESH_COOKIES_VALIDITY` in days (default: `1` day).
+
+---
+
+### 4.1 Admin Login with Cookies
+Authenticates an administrator or manager with email and password. Generates and automatically attaches HTTP-only `accessToken` and `refreshToken` cookies to the response header.
+
+- **Method:** `POST`
+- **URL:** `http://localhost:4000/api/v1/admins/login`
+- **Headers:** `Content-Type: application/json`
+
+#### Demo Payload
+```json
+{
+  "email": "admin@sydtransport.com.au",
+  "password": "AdminPassword123!"
+}
+```
+
+#### cURL
+```bash
+curl -X POST http://localhost:4000/api/v1/admins/login \
+  -H "Content-Type: application/json" \
+  -c cookies.txt \
+  -d '{
+    "email": "admin@sydtransport.com.au",
+    "password": "AdminPassword123!"
+  }'
+```
+
+#### Expected Response (`200 OK`)
+Sets `Set-Cookie: accessToken=...; HttpOnly; Path=/` and `Set-Cookie: refreshToken=...; HttpOnly; Path=/`.
+```json
+{
+  "success": true,
+  "message": "Login successful",
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8101",
+    "name": "System Administrator",
+    "email": "admin@sydtransport.com.au",
+    "role": "admin",
+    "phone": "+61 400 000 000",
+    "isActive": true,
+    "lastLoginAt": "2026-10-14T19:30:00.000Z",
+    "createdAt": "2026-10-14T19:00:00.000Z",
+    "updatedAt": "2026-10-14T19:30:00.000Z"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsIn..."
+}
+```
+
+---
+
+### 4.2 Admin Logout
+Clears the `accessToken` and `refreshToken` authentication cookies.
+
+- **Method:** `POST`
+- **URL:** `http://localhost:4000/api/v1/admins/logout`
+
+#### cURL
+```bash
+curl -X POST http://localhost:4000/api/v1/admins/logout -b cookies.txt
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+### 4.3 Get Current Admin Profile
+Returns the profile of the currently logged-in administrator from either the `accessToken` cookie or an `Authorization: Bearer <token>` header.
+
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/admins/me`
+
+#### cURL
+```bash
+curl -X GET http://localhost:4000/api/v1/admins/me -b cookies.txt
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8101",
+    "name": "System Administrator",
+    "email": "admin@sydtransport.com.au",
+    "role": "admin",
+    "phone": "+61 400 000 000",
+    "isActive": true,
+    "lastLoginAt": "2026-10-14T19:30:00.000Z",
+    "createdAt": "2026-10-14T19:00:00.000Z",
+    "updatedAt": "2026-10-14T19:30:00.000Z"
+  }
+}
+```
+
+---
+
+### 4.4 Refresh JWT Tokens
+Issues fresh access and refresh tokens using the `refreshToken` cookie.
+
+- **Method:** `POST`
+- **URL:** `http://localhost:4000/api/v1/admins/refresh-token`
+
+#### cURL
+```bash
+curl -X POST http://localhost:4000/api/v1/admins/refresh-token -b cookies.txt
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Tokens refreshed successfully",
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8101",
+    "name": "System Administrator",
+    "email": "admin@sydtransport.com.au",
+    "role": "admin"
+  },
+  "accessToken": "eyJhbGciOiJIUzI1NiIsIn...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsIn..."
+}
+```
+
+---
+
+### 4.5 Seed Default Admin & Manager
+Seeds the database with default `admin` and `manager` accounts if none exist.
+
+- **Method:** `POST`
+- **URL:** `http://localhost:4000/api/v1/admins/seed`
+
+#### cURL
+```bash
+curl -X POST http://localhost:4000/api/v1/admins/seed
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Default admin and manager accounts seeded successfully",
+  "seeded": [
+    {
+      "_id": "670da102e3b8214a1a5b8101",
+      "name": "System Administrator",
+      "email": "admin@sydtransport.com.au",
+      "role": "admin",
+      "phone": "+61 400 000 000",
+      "isActive": true,
+      "createdAt": "2026-10-14T19:00:00.000Z",
+      "updatedAt": "2026-10-14T19:00:00.000Z"
+    },
+    {
+      "_id": "670da102e3b8214a1a5b8102",
+      "name": "Operations Manager",
+      "email": "manager@sydtransport.com.au",
+      "role": "manager",
+      "phone": "+61 400 111 222",
+      "isActive": true,
+      "createdAt": "2026-10-14T19:00:00.000Z",
+      "updatedAt": "2026-10-14T19:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### 4.6 List All Administrators
+Retrieves paginated admin and manager accounts with optional search (by name, email, phone), role filtering (`admin` or `manager`), and active status.
+
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/admins`
+- **Query Parameters:**
+  - `role`: Filter by role (`admin`, `manager`)
+  - `isActive`: Filter by status (`true`, `false`)
+  - `search`: Case-insensitive search on name, email, or phone
+  - `page`: Page number (default: `1`)
+  - `limit`: Items per page (default: `50`)
+
+#### cURL
+```bash
+curl -X GET "http://localhost:4000/api/v1/admins?role=admin&isActive=true&page=1&limit=10"
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "admins": [
+    {
+      "_id": "670da102e3b8214a1a5b8101",
+      "name": "System Administrator",
+      "email": "admin@sydtransport.com.au",
+      "role": "admin",
+      "phone": "+61 400 000 000",
+      "isActive": true,
+      "lastLoginAt": null,
+      "createdAt": "2026-10-14T19:00:00.000Z",
+      "updatedAt": "2026-10-14T19:00:00.000Z"
+    }
+  ],
+  "pagination": {
+    "total": 1,
+    "page": 1,
+    "limit": 10,
+    "totalPages": 1
+  }
+}
+```
+
+---
+
+### 4.7 Get Administrator by ID
+Retrieves details of a single admin or manager by MongoDB ObjectId.
+
+- **Method:** `GET`
+- **URL:** `http://localhost:4000/api/v1/admins/:id`
+
+#### cURL
+```bash
+curl -X GET http://localhost:4000/api/v1/admins/670da102e3b8214a1a5b8101
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8101",
+    "name": "System Administrator",
+    "email": "admin@sydtransport.com.au",
+    "role": "admin",
+    "phone": "+61 400 000 000",
+    "isActive": true,
+    "lastLoginAt": null,
+    "createdAt": "2026-10-14T19:00:00.000Z",
+    "updatedAt": "2026-10-14T19:00:00.000Z"
+  }
+}
+```
+
+---
+
+### 4.8 Create Administrator / Manager
+Creates a new administrative staff account. The password is automatically hashed with HMAC-SHA256 using `BCRYPT_SECRET`.
+
+- **Method:** `POST`
+- **URL:** `http://localhost:4000/api/v1/admins`
+- **Headers:** `Content-Type: application/json`
+
+#### Payload Attributes:
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | String | Yes | Full name of the admin or manager |
+| `email` | String | Yes | Unique valid email address |
+| `password` | String | Yes | Minimum 6 characters (hashed via `BCRYPT_SECRET`) |
+| `role` | String | No | `"admin"` or `"manager"` (default: `"admin"`) |
+| `phone` | String | No | Contact phone number |
+| `isActive` | Boolean | No | Account status (default: `true`) |
+
+#### Demo Payload
+```json
+{
+  "name": "Operations Manager",
+  "email": "manager@sydtransport.com.au",
+  "password": "ManagerSecurePass123!",
+  "role": "manager",
+  "phone": "+61 400 111 222",
+  "isActive": true
+}
+```
+
+#### cURL
+```bash
+curl -X POST http://localhost:4000/api/v1/admins \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Operations Manager",
+    "email": "manager@sydtransport.com.au",
+    "password": "ManagerSecurePass123!",
+    "role": "manager",
+    "phone": "+61 400 111 222",
+    "isActive": true
+  }'
+```
+
+#### Expected Response (`201 Created`)
+```json
+{
+  "success": true,
+  "message": "Manager account created successfully",
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8102",
+    "name": "Operations Manager",
+    "email": "manager@sydtransport.com.au",
+    "role": "manager",
+    "phone": "+61 400 111 222",
+    "isActive": true,
+    "lastLoginAt": null,
+    "createdAt": "2026-10-14T19:00:00.000Z",
+    "updatedAt": "2026-10-14T19:00:00.000Z"
+  }
+}
+```
+
+---
+
+### 4.9 Update Administrator
+Updates details, role, status, or password of an existing administrator.
+
+- **Method:** `PATCH`
+- **URL:** `http://localhost:4000/api/v1/admins/:id`
+- **Headers:** `Content-Type: application/json`
+
+#### Demo Payload
+```json
+{
+  "phone": "+61 411 999 888",
+  "role": "manager",
+  "isActive": true
+}
+```
+
+#### cURL
+```bash
+curl -X PATCH http://localhost:4000/api/v1/admins/670da102e3b8214a1a5b8101 \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "+61 411 999 888",
+    "role": "manager",
+    "isActive": true
+  }'
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Administrator updated successfully",
+  "admin": {
+    "_id": "670da102e3b8214a1a5b8101",
+    "name": "System Administrator",
+    "email": "admin@sydtransport.com.au",
+    "role": "manager",
+    "phone": "+61 411 999 888",
+    "isActive": true,
+    "lastLoginAt": null,
+    "createdAt": "2026-10-14T19:00:00.000Z",
+    "updatedAt": "2026-10-14T19:05:00.000Z"
+  }
+}
+```
+
+---
+
+### 4.10 Delete Administrator
+Permanently removes an administrator or manager account.
+
+- **Method:** `DELETE`
+- **URL:** `http://localhost:4000/api/v1/admins/:id`
+
+#### cURL
+```bash
+curl -X DELETE http://localhost:4000/api/v1/admins/670da102e3b8214a1a5b8101
+```
+
+#### Expected Response (`200 OK`)
+```json
+{
+  "success": true,
+  "message": "Administrator \"System Administrator\" (admin@sydtransport.com.au) deleted successfully"
+}
+```
+
