@@ -1036,9 +1036,10 @@ curl -X POST http://localhost:4000/api/v1/bookings/SYD-A9K4F2/cancel \
 
 Management endpoints for internal administrative accounts (`admin` and `manager` roles). Password hashing uses HMAC-SHA256 with the server's `BCRYPT_SECRET` (while `JWT_SECRET` is used for cookie session tokens). Passwords are excluded from queries by default.
 
-Tokens & Cookies validity:
-- **`accessToken`** JWT validity: `ACCESS_TOKEN_VALIDITY` (default: `1d`). Cookie maxAge: `ACCESS_COOKIES_VALIDITY` in minutes (default: `15` min).
-- **`refreshToken`** JWT validity: `REFRESH_TOKEN_VALIDITY` (default: `15d`). Cookie maxAge: `REFRESH_COOKIES_VALIDITY` in days (default: `1` day).
+Tokens & Cookies validity (derived from `.env`):
+- **`accessToken`**: JWT validity & cookie maxAge configured by `ACCESS_TOKEN_VALIDITY` (default: `1d` / 24 hours).
+- **`refreshToken`**: Raw hash of MongoDB `_id` stored in MongoDB with expiration & cookie maxAge configured by `REFRESH_TOKEN_VALIDITY` (default: `7d` / 7 days).
+- **Sliding Session / Daily Auto-Renewal**: Whenever the 1-day `accessToken` expires and the admin makes a request, `AdminAuthMiddleware` automatically verifies the `refreshToken`, re-issues a fresh 1-day `accessToken`, and slides/renews the 7-day `refreshToken` window forward so daily active administrators are never interrupted or logged out.
 
 ---
 

@@ -1,8 +1,14 @@
-import { Module } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Admin, AdminSchema } from './schemas/admin.schema.js';
 import { AdminService } from './admin.service.js';
 import { AdminController } from './admin.controller.js';
+import { AdminAuthMiddleware } from './admin-auth.middleware.js';
 
 // Module configuring administrative user schemas, endpoints, and management services.
 // Uses 'Admin' entity (and 'admins' collection) so 'User'/'users' remains available for customer accounts.
@@ -11,7 +17,18 @@ import { AdminController } from './admin.controller.js';
     MongooseModule.forFeature([{ name: Admin.name, schema: AdminSchema }]),
   ],
   controllers: [AdminController],
-  providers: [AdminService],
+  providers: [AdminService, AdminAuthMiddleware],
   exports: [AdminService, MongooseModule],
 })
-export class AdminModule {}
+export class AdminModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AdminAuthMiddleware)
+      .exclude(
+        { path: 'admins/login', method: RequestMethod.POST },
+        { path: 'admins/seed', method: RequestMethod.POST },
+        { path: 'admins/refresh-token', method: RequestMethod.POST },
+      )
+      .forRoutes(AdminController);
+  }
+}

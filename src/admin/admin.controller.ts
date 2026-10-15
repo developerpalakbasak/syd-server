@@ -18,11 +18,12 @@ import { CreateAdminDto } from './dto/create-admin.dto.js';
 import { UpdateAdminDto } from './dto/update-admin.dto.js';
 import { QueryAdminDto } from './dto/query-admin.dto.js';
 import { LoginAdminDto } from './dto/login-admin.dto.js';
+import type { AuthenticatedRequest } from './admin-auth.middleware.js';
 
 // Controller managing administrative staff accounts (Admin and Manager roles)
 @Controller('admins')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(private readonly adminService: AdminService) { }
 
   // POST /api/v1/admins/login - Authenticates admin/manager and sets accessToken and refreshToken cookies
   @Post('login')
@@ -64,7 +65,16 @@ export class AdminController {
   // POST /api/v1/admins/logout - Clears accessToken and refreshToken cookies
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const cookies = req.cookies as Record<string, string> | undefined;
+    const refreshToken = cookies?.refreshToken;
+    if (refreshToken) {
+      await this.adminService.clearRefreshToken(refreshToken);
+    }
+
     const isProduction = process.env.NODE_ENV === 'production';
     const clearOptions = {
       httpOnly: true,
@@ -82,18 +92,12 @@ export class AdminController {
     };
   }
 
-  // GET /api/v1/admins/me - Returns the authenticated administrator's profile
+  // GET /api/v1/admins/me - Returns the authenticated administrator's profile (guarded and resolved by AdminAuthMiddleware)
   @Get('me')
-  async getMe(@Req() req: Request) {
-    const cookies = req.cookies as Record<string, string> | undefined;
-    const token =
-      cookies?.accessToken ||
-      req.headers.authorization?.replace(/^Bearer\s+/i, '');
-
-    const admin = await this.adminService.getProfileFromToken(token);
+  async getMe(@Req() req: AuthenticatedRequest) {
     return {
       success: true,
-      admin,
+      admin: req.admin,
     };
   }
 

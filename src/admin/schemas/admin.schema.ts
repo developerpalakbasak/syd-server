@@ -46,6 +46,14 @@ export class Admin {
 
   @Prop({ type: Date, default: null })
   lastLoginAt?: Date | null;
+
+  // Stored as raw hash of admin MongoDB _id; excluded from normal queries by default
+  @Prop({ type: String, default: null, select: false, index: true })
+  refreshToken?: string | null;
+
+  // Timestamp when the stored refreshToken expires (7 days by default)
+  @Prop({ type: Date, default: null, select: false })
+  refreshTokenExpiresAt?: Date | null;
 }
 
 export const AdminSchema = SchemaFactory.createForClass(Admin);

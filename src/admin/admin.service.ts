@@ -66,6 +66,29 @@ function escapeRegex(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Safely parses duration strings (e.g. "1d", "7d", "15m", "1h", "15s") into milliseconds
+export function parseDurationMs(val?: string | number, defaultMs = 24 * 60 * 60 * 1000): number {
+  if (val === undefined || val === null) return defaultMs;
+  const cleaned = String(val).split('#')[0].trim().toLowerCase();
+  const match = cleaned.match(/^(\d+(?:\.\d+)?)\s*(ms|s|m|h|d|w|y)?$/);
+  if (!match) {
+    const num = parseFloat(cleaned);
+    return isNaN(num) || num <= 0 ? defaultMs : num * 1000;
+  }
+  const amount = parseFloat(match[1]);
+  const unit = match[2] || 's';
+  switch (unit) {
+    case 'ms': return amount;
+    case 's': return amount * 1000;
+    case 'm': return amount * 60 * 1000;
+    case 'h': return amount * 60 * 60 * 1000;
+    case 'd': return amount * 24 * 60 * 60 * 1000;
+    case 'w': return amount * 7 * 24 * 60 * 60 * 1000;
+    case 'y': return amount * 365 * 24 * 60 * 60 * 1000;
+    default: return defaultMs;
+  }
+}
+
 // Service managing administrative user accounts (Admin and Manager roles)
 @Injectable()
 export class AdminService {
@@ -73,7 +96,7 @@ export class AdminService {
     @InjectModel(Admin.name)
     private readonly adminModel: Model<AdminDocument>,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   private getPasswordSecret(): string {
     return (
@@ -96,21 +119,51 @@ export class AdminService {
   }
 
   getRefreshTokenValidity(): string {
-    return cleanEnvValue(this.configService.get('REFRESH_TOKEN_VALIDITY')) || '15d';
+    return cleanEnvValue(this.configService.get('REFRESH_TOKEN_VALIDITY')) || '7d';
   }
 
-  // Parses ACCESS_COOKIES_VALIDITY in minutes (default 15 minutes) into milliseconds
+  // Parses ACCESS_TOKEN_VALIDITY (e.g. "1d") into milliseconds
+  getAccessValidityMs(): number {
+    return parseDurationMs(this.getAccessTokenValidity(), 24 * 60 * 60 * 1000);
+  }
+
+  // Parses REFRESH_TOKEN_VALIDITY (e.g. "7d") into milliseconds
+  getRefreshValidityMs(): number {
+    return parseDurationMs(this.getRefreshTokenValidity(), 7 * 24 * 60 * 60 * 1000);
+  }
+
+  // Cookie maxAge for accessToken derived from ACCESS_TOKEN_VALIDITY
   getAccessCookieMaxAge(): number {
-    const raw = cleanEnvValue(this.configService.get('ACCESS_COOKIES_VALIDITY'));
-    const minutes = raw ? parseInt(raw, 10) : 15;
-    return (isNaN(minutes) || minutes <= 0 ? 15 : minutes) * 60 * 1000;
+    return this.getAccessValidityMs();
   }
 
-  // Parses REFRESH_COOKIES_VALIDITY in days (default 1 day) into milliseconds
+  // Cookie maxAge for refreshToken derived from REFRESH_TOKEN_VALIDITY
   getRefreshCookieMaxAge(): number {
-    const raw = cleanEnvValue(this.configService.get('REFRESH_COOKIES_VALIDITY'));
-    const days = raw ? parseInt(raw, 10) : 1;
-    return (isNaN(days) || days <= 0 ? 1 : days) * 24 * 60 * 60 * 1000;
+    return this.getRefreshValidityMs();
+  }
+
+  // Computes the raw hash of a MongoDB _id to use as a secure refresh token (not a JWT)
+  hashMongoId(id: string): string {
+    return createHmac('sha256', this.getJwtSecret())
+      .update(id)
+      .digest('hex');
+  }
+
+  // Generates a signed access token JWT
+  generateAccessToken(admin: AdminDocument): string {
+    const payload: AdminJwtPayload = {
+      sub: admin._id.toString(),
+      email: admin.email,
+      role: admin.role,
+      name: admin.name,
+      type: 'access',
+    };
+
+    return jwt.sign(
+      payload,
+      this.getJwtSecret(),
+      { expiresIn: this.getAccessTokenValidity() as jwt.SignOptions['expiresIn'] },
+    );
   }
 
   // Authenticates an administrator or manager and returns generated JWT tokens with cookie validity settings
@@ -142,29 +195,15 @@ export class AdminService {
 
     // Update last login timestamp
     admin.lastLoginAt = new Date();
+
+    const accessToken = this.generateAccessToken(admin);
+    const refreshToken = this.hashMongoId(admin._id.toString());
+    const refreshValidityMs = this.getRefreshValidityMs();
+
+    // Store raw hash refreshToken and 7-day expiration timestamp in MongoDB
+    admin.refreshToken = refreshToken;
+    admin.refreshTokenExpiresAt = new Date(Date.now() + refreshValidityMs);
     await admin.save();
-
-    const payload: AdminJwtPayload = {
-      sub: admin._id.toString(),
-      email: admin.email,
-      role: admin.role,
-      name: admin.name,
-    };
-
-    const jwtSecret = this.getJwtSecret();
-    const accessValidity = this.getAccessTokenValidity();
-    const refreshValidity = this.getRefreshTokenValidity();
-
-    const accessToken = jwt.sign(
-      { ...payload, type: 'access' },
-      jwtSecret,
-      { expiresIn: accessValidity as jwt.SignOptions['expiresIn'] },
-    );
-    const refreshToken = jwt.sign(
-      { ...payload, type: 'refresh' },
-      jwtSecret,
-      { expiresIn: refreshValidity as jwt.SignOptions['expiresIn'] },
-    );
 
     const sanitizedAdmin = await this.findById(admin._id.toString());
 
@@ -177,87 +216,83 @@ export class AdminService {
     };
   }
 
-  // Resolves the authenticated admin from an access token
-  async getProfileFromToken(token?: string): Promise<AdminDocument> {
-    if (!token) {
-      throw new UnauthorizedException('Authentication token missing');
-    }
-
-    try {
-      const decoded = jwt.verify(
-        token,
-        this.getJwtSecret(),
-      ) as AdminJwtPayload;
-
-      if (!decoded || !decoded.sub) {
-        throw new UnauthorizedException('Invalid token payload');
-      }
-
-      const admin = await this.adminModel.findById(decoded.sub).select('-password').exec();
-      if (!admin || !admin.isActive) {
-        throw new UnauthorizedException('Administrator account not found or deactivated');
-      }
-
-      return admin;
-    } catch {
-      throw new UnauthorizedException('Invalid or expired authentication token');
-    }
-  }
-
-  // Refreshes access and refresh tokens using a valid refresh token
+  // Refreshes access and refresh tokens using a valid raw hash refresh token stored in MongoDB
   async refreshTokens(refreshToken?: string): Promise<AdminAuthResult> {
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token missing');
     }
 
-    try {
-      const decoded = jwt.verify(
-        refreshToken,
-        this.getJwtSecret(),
-      ) as AdminJwtPayload;
+    let admin = await this.adminModel
+      .findOne({ refreshToken })
+      .select('+refreshToken +refreshTokenExpiresAt')
+      .exec();
 
-      if (!decoded || !decoded.sub || decoded.type !== 'refresh') {
-        throw new UnauthorizedException('Invalid refresh token');
+    // Backwards-compatibility for existing JWT refresh tokens
+    if (!admin) {
+      try {
+        const decoded = jwt.verify(
+          refreshToken,
+          this.getJwtSecret(),
+        ) as AdminJwtPayload;
+        if (decoded?.sub) {
+          admin = await this.adminModel
+            .findById(decoded.sub)
+            .select('+refreshToken +refreshTokenExpiresAt')
+            .exec();
+        }
+      } catch {
+        // Not a valid legacy JWT
       }
+    }
 
-      const admin = await this.adminModel.findById(decoded.sub).exec();
-      if (!admin || !admin.isActive) {
-        throw new UnauthorizedException('Administrator account not found or deactivated');
-      }
-
-      const payload: AdminJwtPayload = {
-        sub: admin._id.toString(),
-        email: admin.email,
-        role: admin.role,
-        name: admin.name,
-      };
-
-      const jwtSecret = this.getJwtSecret();
-      const accessValidity = this.getAccessTokenValidity();
-      const refreshValidity = this.getRefreshTokenValidity();
-
-      const newAccessToken = jwt.sign(
-        { ...payload, type: 'access' },
-        jwtSecret,
-        { expiresIn: accessValidity as jwt.SignOptions['expiresIn'] },
-      );
-      const newRefreshToken = jwt.sign(
-        { ...payload, type: 'refresh' },
-        jwtSecret,
-        { expiresIn: refreshValidity as jwt.SignOptions['expiresIn'] },
-      );
-
-      const sanitizedAdmin = await this.findById(admin._id.toString());
-
-      return {
-        admin: sanitizedAdmin,
-        accessToken: newAccessToken,
-        refreshToken: newRefreshToken,
-        accessCookieMaxAge: this.getAccessCookieMaxAge(),
-        refreshCookieMaxAge: this.getRefreshCookieMaxAge(),
-      };
-    } catch {
+    if (!admin || !admin.isActive) {
       throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    // Check if the refreshToken has expired (older than 7 days)
+    if (
+      admin.refreshTokenExpiresAt &&
+      admin.refreshTokenExpiresAt.getTime() < Date.now()
+    ) {
+      admin.refreshToken = null;
+      admin.refreshTokenExpiresAt = null;
+      await admin.save();
+      throw new UnauthorizedException(
+        'Refresh token has expired. Please log in again.',
+      );
+    }
+
+    const newAccessToken = this.generateAccessToken(admin);
+    const newRefreshToken = this.hashMongoId(admin._id.toString());
+    const refreshValidityMs = this.getRefreshValidityMs();
+
+    // Rotate/extend refreshToken validity for another 7 days
+    admin.refreshToken = newRefreshToken;
+    admin.refreshTokenExpiresAt = new Date(Date.now() + refreshValidityMs);
+    await admin.save();
+
+    const sanitizedAdmin = await this.findById(admin._id.toString());
+
+    return {
+      admin: sanitizedAdmin,
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
+      accessCookieMaxAge: this.getAccessCookieMaxAge(),
+      refreshCookieMaxAge: this.getRefreshCookieMaxAge(),
+    };
+  }
+
+  // Invalidates a refresh token in MongoDB on logout
+  async clearRefreshToken(refreshToken: string): Promise<void> {
+    try {
+      await this.adminModel
+        .updateOne(
+          { refreshToken },
+          { $set: { refreshToken: null, refreshTokenExpiresAt: null } },
+        )
+        .exec();
+    } catch {
+      // Ignore if not found
     }
   }
 
