@@ -1,6 +1,6 @@
 import { IsOptional, IsString } from 'class-validator';
 
-export class QueryPlaceDto {
+export class QueryRouteDto {
   @IsOptional()
   @IsString()
   firstPlace?: string;

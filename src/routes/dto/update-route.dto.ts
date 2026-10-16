@@ -1,7 +1,6 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
-  IsNotEmpty,
   IsNumber,
   IsObject,
   IsOptional,
@@ -9,18 +8,17 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { PlaceLocationDetailsDto } from './place-location-details.dto.js';
+import { RouteLocationDetailsDto } from './route-location-details.dto.js';
 
-export class CreatePlaceDto {
+export class UpdateRouteDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  firstPlace: string;
+  firstPlace?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  lastPlace: string;
+  lastPlace?: string;
 
-  // Supports 'fair' (user prompt term) and standard 'fare'
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -32,14 +30,10 @@ export class CreatePlaceDto {
   fare?: number;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  increaseFairPerPerson?: number;
+  increaseFairPerPerson?: number | Record<string, number>;
 
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  increaseFarePerPerson?: number;
+  increaseFarePerPerson?: number | Record<string, number>;
 
   @IsOptional()
   @IsString()
@@ -56,22 +50,25 @@ export class CreatePlaceDto {
   durationMin?: number;
 
   @IsOptional()
-  @IsString()
-  vehicleType?: string;
+  vehicleType?: string[] | string;
 
   @IsOptional()
   @IsObject()
   vehicleFares?: Record<string, number>;
 
   @IsOptional()
-  @ValidateNested()
-  @Type(() => PlaceLocationDetailsDto)
-  firstPlaceDetails?: PlaceLocationDetailsDto;
+  @IsObject()
+  vehicleAndFares?: Record<string, number>;
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => PlaceLocationDetailsDto)
-  lastPlaceDetails?: PlaceLocationDetailsDto;
+  @Type(() => RouteLocationDetailsDto)
+  firstPlaceDetails?: RouteLocationDetailsDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RouteLocationDetailsDto)
+  lastPlaceDetails?: RouteLocationDetailsDto;
 
   @IsOptional()
   @IsBoolean()

@@ -1,60 +1,68 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PlacesService } from './places.service.js';
+import { RoutesService } from './routes.service.js';
 
-describe('PlacesService', () => {
-  let service: PlacesService;
-  let mockPlaceModel: any;
+describe('RoutesService', () => {
+  let service: RoutesService;
+  let mockRouteModel: any;
 
   beforeEach(() => {
-    function MockPlace(this: any, data: any) {
+    function MockRoute(this: any, data: any) {
       Object.assign(this, data);
-      this._id = 'mock-place-id';
+      this._id = 'mock-route-id';
       this.save = vi.fn().mockResolvedValue(this);
     }
-    MockPlace.find = vi.fn().mockReturnThis();
-    MockPlace.findOne = vi.fn().mockReturnThis();
-    MockPlace.findById = vi.fn().mockReturnThis();
-    MockPlace.findByIdAndUpdate = vi.fn().mockReturnThis();
-    MockPlace.findByIdAndDelete = vi.fn().mockReturnThis();
-    MockPlace.findOneAndUpdate = vi.fn().mockReturnThis();
-    MockPlace.countDocuments = vi.fn().mockReturnThis();
-    MockPlace.distinct = vi.fn().mockReturnThis();
-    MockPlace.select = vi.fn().mockReturnThis();
-    MockPlace.lean = vi.fn().mockReturnThis();
-    MockPlace.sort = vi.fn().mockReturnThis();
-    MockPlace.skip = vi.fn().mockReturnThis();
-    MockPlace.limit = vi.fn().mockReturnThis();
-    MockPlace.exec = vi.fn().mockResolvedValue([]);
+    MockRoute.find = vi.fn().mockReturnThis();
+    MockRoute.findOne = vi.fn().mockReturnThis();
+    MockRoute.findById = vi.fn().mockReturnThis();
+    MockRoute.findByIdAndUpdate = vi.fn().mockReturnThis();
+    MockRoute.findByIdAndDelete = vi.fn().mockReturnThis();
+    MockRoute.findOneAndUpdate = vi.fn().mockReturnThis();
+    MockRoute.countDocuments = vi.fn().mockReturnThis();
+    MockRoute.distinct = vi.fn().mockReturnThis();
+    MockRoute.select = vi.fn().mockReturnThis();
+    MockRoute.lean = vi.fn().mockReturnThis();
+    MockRoute.sort = vi.fn().mockReturnThis();
+    MockRoute.skip = vi.fn().mockReturnThis();
+    MockRoute.limit = vi.fn().mockReturnThis();
+    MockRoute.exec = vi.fn().mockResolvedValue(null);
 
-    mockPlaceModel = MockPlace;
-    service = new PlacesService(mockPlaceModel as any);
+    mockRouteModel = MockRoute;
+    service = new RoutesService(mockRouteModel as any);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should create a place route fare', async () => {
+  it('should create a route fare', async () => {
     const result = await service.create({
       firstPlace: 'Sydney Airport (SYD)',
       lastPlace: 'Sydney CBD',
-      fair: 65,
+      vehicleAndFares: { taxi: 65, suv: 95 },
+      increaseFarePerPerson: { taxi: 10, suv: 12 },
     });
 
     expect(result).toBeDefined();
     expect(result.firstPlace).toBe('Sydney Airport (SYD)');
     expect(result.lastPlace).toBe('Sydney CBD');
-    expect(result.fair).toBe(65);
-    expect(result.fare).toBe(65);
+    expect(result.vehicleAndFares).toEqual({ taxi: 65, suv: 95 });
+    expect(result.increaseFarePerPerson).toEqual({ taxi: 10, suv: 12 });
     expect(result.currency).toBe('AUD');
   });
 
-  it('should throw BadRequestException if fair or fare is missing', async () => {
+  it('should throw ConflictException if route already exists', async () => {
+    mockRouteModel.exec.mockResolvedValueOnce({
+      _id: 'existing-id',
+      firstPlace: 'Sydney Airport (SYD)',
+      lastPlace: 'Sydney CBD',
+    });
+
     await expect(
       service.create({
-        firstPlace: 'Sydney Airport',
-        lastPlace: 'CBD',
-      } as any),
+        firstPlace: 'Sydney Airport (SYD)',
+        lastPlace: 'Sydney CBD',
+        fair: 65,
+      }),
     ).rejects.toThrow();
   });
 
@@ -65,14 +73,14 @@ describe('PlacesService', () => {
       fair: 65,
       fare: 65,
     };
-    mockPlaceModel.exec.mockResolvedValueOnce(mockRoute);
+    mockRouteModel.exec.mockResolvedValueOnce(mockRoute);
 
     const result = await service.findByRoute('Sydney Airport (SYD)', 'Sydney CBD');
     expect(result).toEqual(mockRoute);
   });
 
-  it('should throw NotFoundException if route is not found and database has places', async () => {
-    mockPlaceModel.exec
+  it('should throw NotFoundException if route is not found and database has routes', async () => {
+    mockRouteModel.exec
       .mockResolvedValueOnce(null) // exact
       .mockResolvedValueOnce(null) // reverse
       .mockResolvedValueOnce(null) // partial
@@ -86,7 +94,7 @@ describe('PlacesService', () => {
 
   it('should get all unique places deduplicated from firstPlace and lastPlace', async () => {
     // Return distinct firstPlaces and lastPlaces with overlapping values
-    mockPlaceModel.exec
+    mockRouteModel.exec
       .mockResolvedValueOnce(['Sydney Airport (SYD)', 'Sydney CBD'])
       .mockResolvedValueOnce(['Sydney CBD', 'Bondi Beach', 'Sydney Airport (SYD)']);
 
@@ -101,7 +109,7 @@ describe('PlacesService', () => {
   });
 
   it('should filter unique places by search keyword', async () => {
-    mockPlaceModel.exec
+    mockRouteModel.exec
       .mockResolvedValueOnce(['Sydney Airport (SYD)', 'Sydney CBD'])
       .mockResolvedValueOnce(['Bondi Beach', 'Parramatta']);
 
