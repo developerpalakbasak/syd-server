@@ -18,7 +18,7 @@ import { LoginAdminDto } from './dto/login-admin.dto.js';
 
 // JWT payload structure for authenticated administrators
 export interface AdminJwtPayload {
-  sub: string;
+  sub?: string;
   email: string;
   role: string;
   name: string;
@@ -115,16 +115,16 @@ export class AdminService {
   }
 
   getAccessTokenValidity(): string {
-    return cleanEnvValue(this.configService.get('ACCESS_TOKEN_VALIDITY')) || '1d';
+    return cleanEnvValue(this.configService.get('ACCESS_TOKEN_VALIDITY')) || '15m';
   }
 
   getRefreshTokenValidity(): string {
     return cleanEnvValue(this.configService.get('REFRESH_TOKEN_VALIDITY')) || '7d';
   }
 
-  // Parses ACCESS_TOKEN_VALIDITY (e.g. "1d") into milliseconds
+  // Parses ACCESS_TOKEN_VALIDITY (e.g. "15m") into milliseconds
   getAccessValidityMs(): number {
-    return parseDurationMs(this.getAccessTokenValidity(), 24 * 60 * 60 * 1000);
+    return parseDurationMs(this.getAccessTokenValidity(), 15 * 60 * 1000);
   }
 
   // Parses REFRESH_TOKEN_VALIDITY (e.g. "7d") into milliseconds
@@ -149,10 +149,9 @@ export class AdminService {
       .digest('hex');
   }
 
-  // Generates a signed access token JWT
+  // Generates a signed access token JWT without _id / sub
   generateAccessToken(admin: AdminDocument): string {
     const payload: AdminJwtPayload = {
-      sub: admin._id.toString(),
       email: admin.email,
       role: admin.role,
       name: admin.name,

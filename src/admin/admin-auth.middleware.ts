@@ -10,9 +10,17 @@ import { Model } from 'mongoose';
 import { Admin, AdminDocument } from './schemas/admin.schema.js';
 import { AdminService, AdminJwtPayload } from './admin.service.js';
 
-// Extends Express Request to include authenticated admin and optional fresh access token
+// Extends Express Request to include authenticated admin (either full document or decoded token claims) and optional fresh access token
+export interface AuthenticatedAdmin {
+  _id?: string;
+  email: string;
+  role: string;
+  name: string;
+  isActive?: boolean;
+}
+
 export interface AuthenticatedRequest extends Request {
-  admin?: AdminDocument;
+  admin?: AdminDocument | AuthenticatedAdmin;
   accessToken?: string;
 }
 
@@ -45,7 +53,7 @@ export class AdminAuthMiddleware implements NestMiddleware {
       cookies?.refreshToken ||
       (req.headers['x-refresh-token'] as string | undefined);
 
-    // 1. If accessToken is available, try verifying and decoding it
+    // 1. If accessToken is available, verify and decode it without hitting the database (zero DB queries)
     if (accessToken) {
       try {
         const decoded = jwt.verify(
@@ -53,29 +61,18 @@ export class AdminAuthMiddleware implements NestMiddleware {
           this.adminService.getJwtSecret(),
         ) as AdminJwtPayload;
 
-        if (decoded && decoded.sub) {
-          const admin = await this.adminModel
-            .findById(decoded.sub)
-            .select('-password')
-            .exec();
-
-          if (!admin || !admin.isActive) {
-            throw new UnauthorizedException(
-              'Administrator account not found or deactivated',
-            );
-          }
-
-          req.admin = admin;
+        if (decoded && decoded.email) {
+          req.admin = {
+            email: decoded.email,
+            role: decoded.role,
+            name: decoded.name,
+            isActive: true,
+            ...(decoded.sub ? { _id: decoded.sub } : {}),
+          };
           req.accessToken = accessToken;
           return next();
         }
       } catch (err) {
-        if (
-          err instanceof UnauthorizedException &&
-          err.message.includes('deactivated')
-        ) {
-          throw err;
-        }
         // Access token is expired or invalid; fall through to verify refreshToken
       }
     }
