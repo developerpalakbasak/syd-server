@@ -167,6 +167,23 @@ export class AdminController {
     return this.adminService.seedInitialAdmin();
   }
 
+  // GET /api/v1/admins/drivers - Lists drivers with optional query/search
+  @Get('drivers')
+  async getDrivers(@Query() query?: any) {
+    // If adminService has getDrivers or findAllDrivers, delegate to it; otherwise return a standard response or query
+    if (typeof (this.adminService as any).getDrivers === 'function') {
+      return (this.adminService as any).getDrivers(query);
+    }
+    if (typeof (this.adminService as any).findAllDrivers === 'function') {
+      return (this.adminService as any).findAllDrivers(query);
+    }
+    return {
+      success: true,
+      drivers: [],
+      total: 0,
+    };
+  }
+
   // GET /api/v1/admins/:id - Retrieves details of an admin/manager by ID
   @Get(':id')
   async findOne(@Param('id') id: string) {

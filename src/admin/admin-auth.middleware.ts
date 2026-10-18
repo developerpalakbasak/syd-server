@@ -31,7 +31,7 @@ export class AdminAuthMiddleware implements NestMiddleware {
     @InjectModel(Admin.name)
     private readonly adminModel: Model<AdminDocument>,
     private readonly adminService: AdminService,
-  ) {}
+  ) { }
 
   async use(req: AuthenticatedRequest, res: Response, next: NextFunction) {
     // Skip public authentication endpoints (login, seed, and explicit refresh-token)
