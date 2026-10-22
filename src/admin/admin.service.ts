@@ -89,12 +89,16 @@ export function parseDurationMs(val?: string | number, defaultMs = 24 * 60 * 60 
   }
 }
 
+import { Driver, DriverDocument } from '../drivers/schemas/driver.schema.js';
+
 // Service managing administrative user accounts (Admin and Manager roles)
 @Injectable()
 export class AdminService {
   constructor(
     @InjectModel(Admin.name)
     private readonly adminModel: Model<AdminDocument>,
+    @InjectModel(Driver.name)
+    private readonly driverModel: Model<DriverDocument>,
     private readonly configService: ConfigService,
   ) { }
 
@@ -490,6 +494,80 @@ export class AdminService {
       success: true,
       message: 'Default admin and manager accounts seeded successfully',
       seeded: [defaultAdmin, defaultManager],
+    };
+  }
+
+  // Driver management for Admins
+  async getDrivers(query?: any) {
+    const filter: any = {};
+    if (query?.status && query.status !== 'all') {
+      filter.status = query.status;
+    }
+    if (query?.service && query.service !== 'all') {
+      filter['vehicle.serviceType'] = query.service;
+    }
+    if (query?.search) {
+      const reg = new RegExp(escapeRegex(query.search), 'i');
+      filter.$or = [
+        { name: reg },
+        { email: reg },
+        { phone: reg },
+        { 'vehicle.regoPlate': reg },
+        { 'vehicle.model': reg },
+      ];
+    }
+
+    const limit = query?.limit ? parseInt(query.limit, 10) : 50;
+    const drivers = await this.driverModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+
+    const total = await this.driverModel.countDocuments(filter).exec();
+
+    // Transform for admin frontend compatibility
+    const formattedDrivers = drivers.map((d) => ({
+      _id: d._id.toString(),
+      driverNumber: d._id.toString().slice(-6).toUpperCase(),
+      name: d.name,
+      email: d.email,
+      phone: d.phone,
+      licenseNumber: d.documents?.driverLicenseNumber || '',
+      vehiclePlate: d.vehicle?.regoPlate,
+      vehicleModel: `${d.vehicle?.make || ''} ${d.vehicle?.model || ''}`.trim(),
+      vehicleType: d.vehicle?.serviceType,
+      service: d.vehicle?.serviceType,
+      status: d.status,
+      rating: d.rating,
+      totalTrips: d.totalTrips,
+      walletBalanceCents: d.walletBalanceCents,
+      notes: d.adminNotes || '',
+      createdAt: (d as any).createdAt,
+      updatedAt: (d as any).updatedAt,
+    }));
+
+    return {
+      success: true,
+      total,
+      drivers: formattedDrivers,
+    };
+  }
+
+  async updateDriverStatus(driverId: string, status: string, notes?: string) {
+    const update: any = { status };
+    if (notes !== undefined) update.adminNotes = notes;
+    if (status === 'active') {
+      // verified and active
+    }
+
+    const updated = await this.driverModel.findByIdAndUpdate(driverId, update, { new: true }).exec();
+    if (!updated) throw new NotFoundException('Driver not found');
+
+    return {
+      success: true,
+      message: `Driver status updated to ${status}`,
+      driver: updated,
     };
   }
 }

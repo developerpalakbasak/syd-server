@@ -170,18 +170,17 @@ export class AdminController {
   // GET /api/v1/admins/drivers - Lists drivers with optional query/search
   @Get('drivers')
   async getDrivers(@Query() query?: any) {
-    // If adminService has getDrivers or findAllDrivers, delegate to it; otherwise return a standard response or query
-    if (typeof (this.adminService as any).getDrivers === 'function') {
-      return (this.adminService as any).getDrivers(query);
-    }
-    if (typeof (this.adminService as any).findAllDrivers === 'function') {
-      return (this.adminService as any).findAllDrivers(query);
-    }
-    return {
-      success: true,
-      drivers: [],
-      total: 0,
-    };
+    return this.adminService.getDrivers(query);
+  }
+
+  // PATCH /api/v1/admins/drivers/:id/status - Approve, suspend, or update driver status
+  @Patch('drivers/:id/status')
+  async updateDriverStatus(
+    @Param('id') id: string,
+    @Body('status') status: string,
+    @Body('notes') notes?: string,
+  ) {
+    return this.adminService.updateDriverStatus(id, status, notes);
   }
 
   // GET /api/v1/admins/:id - Retrieves details of an admin/manager by ID

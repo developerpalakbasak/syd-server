@@ -115,10 +115,14 @@ export class Booking {
   @Prop({ enum: ['pickup', 'dropoff', null], default: null })
   airportTripType?: string;
 
+  // Assigned Driver reference
+  @Prop({ type: Types.ObjectId, ref: 'Driver', required: false, index: true })
+  driver?: Types.ObjectId;
+
   // Booking lifecycle status
   @Prop({
     required: true,
-    enum: ['pending', 'confirmed', 'assigned', 'in_progress', 'completed', 'cancelled'],
+    enum: ['pending', 'confirmed', 'assigned', 'on_the_way', 'arrived', 'in_progress', 'completed', 'cancelled'],
     default: 'confirmed',
     index: true,
   })
