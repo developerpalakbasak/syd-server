@@ -108,6 +108,10 @@ export class Booking {
   @Prop({ trim: true, default: '' })
   passengerEmail?: string;
 
+  // Registered passenger reference (if logged in or auto-linked)
+  @Prop({ type: Types.ObjectId, ref: 'Passenger', required: false, index: true })
+  passengerId?: Types.ObjectId;
+
   // Optional airport transfer extras
   @Prop({ trim: true, default: '' })
   flightNumber?: string;

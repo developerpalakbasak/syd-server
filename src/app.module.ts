@@ -6,6 +6,8 @@ import { BookingsModule } from './bookings/bookings.module.js';
 import { RoutesModule } from './routes/routes.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { DriversModule } from './drivers/drivers.module.js';
+import { QuotesModule } from './quotes/quotes.module.js';
+import { PassengersModule } from './passengers/passengers.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
@@ -28,6 +30,8 @@ import { AppService } from './app.service.js';
     RoutesModule,
     AdminModule,
     DriversModule,
+    QuotesModule,
+    PassengersModule,
   ],
   controllers: [AppController],
   providers: [AppService],

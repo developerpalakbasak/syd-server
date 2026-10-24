@@ -11,6 +11,7 @@ import { Model, Types } from 'mongoose';
 import jwt from 'jsonwebtoken';
 import { Driver, DriverDocument, DriverStatus } from './schemas/driver.schema.js';
 import { Booking, BookingDocument } from '../bookings/schemas/booking.schema.js';
+import { BookingsService } from '../bookings/bookings.service.js';
 import { RegisterDriverDto, LoginDriverDto, UpdateDriverStatusDto } from './dto/driver.dto.js';
 import { hashPassword, verifyPassword } from '../admin/admin.service.js';
 
@@ -31,6 +32,7 @@ export class DriversService {
   constructor(
     @InjectModel(Driver.name) private readonly driverModel: Model<DriverDocument>,
     @InjectModel(Booking.name) private readonly bookingModel: Model<BookingDocument>,
+    private readonly bookingsService: BookingsService,
     private readonly configService: ConfigService,
   ) {}
 
@@ -244,7 +246,26 @@ export class DriversService {
     booking.status = 'assigned';
     await booking.save();
 
-    await this.driverModel.findByIdAndUpdate(driverId, { status: DriverStatus.ON_TRIP }).exec();
+    const driverDoc = await this.driverModel
+      .findByIdAndUpdate(driverId, { status: DriverStatus.ON_TRIP }, { returnDocument: 'after' })
+      .select('name phone vehicleInfo rating')
+      .exec();
+
+    // Broadcast real-time interactive alert to the passenger
+    this.bookingsService.broadcastBookingUpdate({
+      bookingNumber: booking.bookingNumber,
+      bookingId: booking._id.toString(),
+      status: 'assigned',
+      driver: driverDoc
+        ? {
+            name: driverDoc.name,
+            phone: driverDoc.phone,
+            vehicle: driverDoc.vehicle,
+            rating: driverDoc.rating,
+          }
+        : undefined,
+      message: `Driver ${driverDoc?.name || ''} has accepted your trip and is assigned!`,
+    });
 
     return {
       success: true,
@@ -283,6 +304,34 @@ export class DriversService {
         .exec();
     }
     await booking.save();
+
+    const driverDoc = await this.driverModel
+      .findById(driverId)
+      .select('name phone vehicleInfo rating')
+      .exec();
+
+    const statusMessages: Record<string, string> = {
+      on_the_way: `Driver ${driverDoc?.name || ''} is on the way to pick you up.`,
+      arrived: `Driver ${driverDoc?.name || ''} has arrived at your pickup location!`,
+      in_progress: 'Your trip is now in progress. Have a safe journey!',
+      completed: 'Your trip has been completed. Thank you for riding with us!',
+    };
+
+    // Broadcast progress event to passenger
+    this.bookingsService.broadcastBookingUpdate({
+      bookingNumber: booking.bookingNumber,
+      bookingId: booking._id.toString(),
+      status: newStatus,
+      driver: driverDoc
+        ? {
+            name: driverDoc.name,
+            phone: driverDoc.phone,
+            vehicle: driverDoc.vehicle,
+            rating: driverDoc.rating,
+          }
+        : undefined,
+      message: statusMessages[newStatus] || `Trip status updated to ${newStatus}`,
+    });
 
     return {
       success: true,

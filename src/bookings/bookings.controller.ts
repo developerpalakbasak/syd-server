@@ -8,7 +8,9 @@ import {
   Patch,
   Post,
   Query,
+  Sse,
 } from '@nestjs/common';
+import { filter, map } from 'rxjs';
 import { BookingsService } from './bookings.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
@@ -70,6 +72,22 @@ export class BookingsController {
   async findOne(@Param('refOrId') refOrId: string) {
     const booking = await this.bookingsService.findByReferenceOrId(refOrId);
     return { success: true, booking };
+  }
+
+  // GET /api/v1/bookings/:refOrId/events - Real-time SSE stream for passenger tracking
+  @Sse(':refOrId/events')
+  trackBookingStream(@Param('refOrId') refOrId: string) {
+    const cleanRef = refOrId.toUpperCase();
+    return this.bookingsService.bookingEvents$.pipe(
+      filter(
+        (event) =>
+          event.bookingNumber.toUpperCase() === cleanRef ||
+          event.bookingId === refOrId,
+      ),
+      map((event) => ({
+        data: event,
+      })),
+    );
   }
 
   // PATCH /api/v1/bookings/:refOrId/status - Updates booking lifecycle status, payment status, or internal notes.

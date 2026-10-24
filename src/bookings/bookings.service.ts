@@ -6,21 +6,44 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
+import { Subject } from 'rxjs';
 import { Booking, BookingDocument } from './schemas/booking.schema.js';
 import { Vehicle, VehicleDocument } from '../vehicles/schemas/vehicle.schema.js';
+import { QuotesService } from '../quotes/quotes.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
 
 // Service managing booking creation, queries, status transitions, and reference generation.
 @Injectable()
 export class BookingsService implements OnModuleInit {
-  // Injects Mongoose Models for Booking and Vehicle collections.
+  // Real-time broadcast channel for passenger booking status updates
+  public readonly bookingEvents$ = new Subject<{
+    bookingNumber: string;
+    bookingId: string;
+    status: string;
+    driver?: any;
+    message: string;
+  }>();
+
+  // Injects Mongoose Models for Booking and Vehicle collections and QuotesService.
   constructor(
     @InjectModel(Booking.name)
     private readonly bookingModel: Model<BookingDocument>,
     @InjectModel(Vehicle.name)
     private readonly vehicleModel: Model<VehicleDocument>,
+    private readonly quotesService: QuotesService,
   ) {}
+
+  // Broadcast an update to connected passengers
+  broadcastBookingUpdate(update: {
+    bookingNumber: string;
+    bookingId: string;
+    status: string;
+    driver?: any;
+    message: string;
+  }) {
+    this.bookingEvents$.next(update);
+  }
 
   // Synchronizes MongoDB indexes with the current schema, dropping any obsolete indexes.
   async onModuleInit() {
@@ -43,29 +66,34 @@ export class BookingsService implements OnModuleInit {
 
   // Validates request data, resolves vehicle details, generates reference code, and creates guest booking.
   async create(dto: CreateBookingDto): Promise<BookingDocument> {
-    // 1. Resolve Pickup and Destination (supporting HeroBookingForm aliases)
-    const pickup = dto.pickup ?? dto.from;
+    // 0. If quoteToken is provided, extract verified details
+    const quotePayload = dto.quoteToken
+      ? this.quotesService.verifyQuoteToken(dto.quoteToken)
+      : null;
+
+    // 1. Resolve Pickup and Destination (supporting HeroBookingForm aliases or quoteToken)
+    const pickup = dto.pickup ?? dto.from ?? quotePayload?.pickup;
     if (!pickup || typeof pickup.lat !== 'number' || typeof pickup.lng !== 'number') {
       throw new BadRequestException('Pickup location (from) is required with valid coordinates');
     }
 
-    const destination = dto.destination ?? dto.to;
-    const service = dto.service ?? 'airport';
+    const destination = dto.destination ?? dto.to ?? quotePayload?.destination;
+    const service = dto.service ?? quotePayload?.service ?? 'airport';
 
     // 2. Resolve Timing & Passengers
     const isNow = dto.isNow ?? false;
     let pickupAt: Date | undefined;
     if (!isNow) {
-      const rawDate = dto.pickupAt ?? dto.when;
+      const rawDate = dto.pickupAt ?? dto.when ?? quotePayload?.pickupAt;
       if (rawDate) {
         pickupAt = new Date(rawDate);
       }
     }
 
-    const passengers = dto.passengers ?? dto.pax ?? 1;
+    const passengers = dto.passengers ?? dto.pax ?? quotePayload?.passengers ?? 1;
 
     // 3. Resolve Vehicle Details
-    const vehicleTypeSlug = (dto.vehicleType ?? 'taxi').toLowerCase();
+    const vehicleTypeSlug = (dto.vehicleType ?? quotePayload?.vehicleType ?? 'taxi').toLowerCase();
     let vehicleDoc: VehicleDocument | null = null;
 
     if (dto.vehicleId && isValidObjectId(dto.vehicleId)) {
@@ -129,7 +157,7 @@ export class BookingsService implements OnModuleInit {
       flightNumber: dto.flightNumber?.trim() ?? '',
       airportTripType: dto.airportTripType ?? null,
       status: 'confirmed',
-      fare: dto.fare ?? {
+      fare: dto.fare ?? quotePayload?.price ?? {
         currency: 'AUD',
         total: vehicleDoc ? vehicleDoc.basePrice : 0,
         gstIncluded: vehicleDoc ? Math.round(vehicleDoc.basePrice / 11) : 0,
@@ -137,6 +165,7 @@ export class BookingsService implements OnModuleInit {
         durationMin: 0,
         lines: [],
       },
+      quoteToken: dto.quoteToken ?? '',
       notes: dto.notes ?? '',
       paymentStatus: 'pending',
     });
@@ -175,16 +204,21 @@ export class BookingsService implements OnModuleInit {
     return { total, bookings };
   }
 
-  // Finds booking by MongoDB ObjectId or reference number, populating vehicle relations.
+  // Finds booking by MongoDB ObjectId or reference number, populating vehicle and driver relations.
   async findByReferenceOrId(refOrId: string): Promise<BookingDocument> {
     let booking: BookingDocument | null = null;
     if (isValidObjectId(refOrId)) {
-      booking = await this.bookingModel.findById(refOrId).populate('vehicle').exec();
+      booking = await this.bookingModel
+        .findById(refOrId)
+        .populate('vehicle')
+        .populate('driver', 'name phone vehicleInfo rating')
+        .exec();
     }
     if (!booking) {
       booking = await this.bookingModel
         .findOne({ bookingNumber: refOrId.toUpperCase() })
         .populate('vehicle')
+        .populate('driver', 'name phone vehicleInfo rating')
         .exec();
     }
 
