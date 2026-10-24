@@ -143,8 +143,10 @@ export class QuotesService {
 
     // Get active vehicles eligible for this service and passenger count
     const filter: Record<string, any> = { isActive: true };
-    if (service) {
-      filter.supportedServices = service;
+    if (service === 'taxi') {
+      filter.slug = { $in: ['taxi', 'suv'] };
+    } else if (service === 'chauffeur') {
+      filter.slug = { $in: ['executive', 'luxury', 'suv', 'mpv', 'van'] };
     }
     filter.passengersMax = { $gte: passengers };
 
