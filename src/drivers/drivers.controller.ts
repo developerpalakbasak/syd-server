@@ -9,8 +9,10 @@ import {
   Post,
   Req,
   Res,
+  Sse,
   UnauthorizedException,
 } from '@nestjs/common';
+import { map } from 'rxjs';
 import type { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { ConfigService } from '@nestjs/config';
@@ -141,5 +143,15 @@ export class DriversController {
   ) {
     const driver = this.extractDriverFromReq(req);
     return this.driversService.updateTripStatus(driver.sub, id, status);
+  }
+
+  // GET /api/v1/drivers/events - Real-time SSE dispatch notification stream for online drivers
+  @Sse('events')
+  driverEventsStream() {
+    return this.driversService.dispatchEvents$.pipe(
+      map((event) => ({
+        data: event,
+      })),
+    );
   }
 }

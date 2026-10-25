@@ -29,6 +29,11 @@ export class DriversService {
   // Real-time broadcast channel for driver online/offline updates
   public readonly driverEvents$ = new Subject<{ event: string; data?: any }>();
 
+  // Stream of dispatch events (new job, job taken) for online drivers
+  get dispatchEvents$() {
+    return this.bookingsService.driverDispatchEvents$;
+  }
+
   constructor(
     @InjectModel(Driver.name) private readonly driverModel: Model<DriverDocument>,
     @InjectModel(Booking.name) private readonly bookingModel: Model<BookingDocument>,
@@ -248,7 +253,7 @@ export class DriversService {
 
     const driverDoc = await this.driverModel
       .findByIdAndUpdate(driverId, { status: DriverStatus.ON_TRIP }, { returnDocument: 'after' })
-      .select('name phone vehicleInfo rating')
+      .select('name phone vehicle rating')
       .exec();
 
     // Broadcast real-time interactive alert to the passenger
@@ -265,6 +270,19 @@ export class DriversService {
           }
         : undefined,
       message: `Driver ${driverDoc?.name || ''} has accepted your trip and is assigned!`,
+    });
+
+    // Notify other drivers that this job has been accepted
+    this.bookingsService.broadcastDriverDispatch({
+      type: 'job_taken',
+      bookingId: booking._id.toString(),
+      bookingNumber: booking.bookingNumber,
+      service: booking.service,
+      pickup: booking.pickup,
+      destination: booking.destination,
+      fare: booking.fare,
+      passengers: booking.passengers,
+      message: `Job ${booking.bookingNumber} was taken`,
     });
 
     return {
@@ -307,7 +325,7 @@ export class DriversService {
 
     const driverDoc = await this.driverModel
       .findById(driverId)
-      .select('name phone vehicleInfo rating')
+      .select('name phone vehicle rating')
       .exec();
 
     const statusMessages: Record<string, string> = {

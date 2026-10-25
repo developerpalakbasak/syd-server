@@ -26,6 +26,19 @@ export class BookingsService implements OnModuleInit {
     message: string;
   }>();
 
+  // Real-time dispatch broadcast channel for online drivers
+  public readonly driverDispatchEvents$ = new Subject<{
+    type: 'new_job' | 'job_taken';
+    bookingId: string;
+    bookingNumber: string;
+    service: string;
+    pickup: any;
+    destination: any;
+    fare: any;
+    passengers: number;
+    message: string;
+  }>();
+
   // Injects Mongoose Models for Booking and Vehicle collections and QuotesService.
   constructor(
     @InjectModel(Booking.name)
@@ -46,6 +59,21 @@ export class BookingsService implements OnModuleInit {
     message: string;
   }) {
     this.bookingEvents$.next(update);
+  }
+
+  // Broadcast dispatch job to online drivers
+  broadcastDriverDispatch(event: {
+    type: 'new_job' | 'job_taken';
+    bookingId: string;
+    bookingNumber: string;
+    service: string;
+    pickup: any;
+    destination: any;
+    fare: any;
+    passengers: number;
+    message: string;
+  }) {
+    this.driverDispatchEvents$.next(event);
   }
 
   // Synchronizes MongoDB indexes with the current schema, dropping any obsolete indexes.
@@ -185,7 +213,22 @@ export class BookingsService implements OnModuleInit {
       paymentStatus: 'pending',
     });
 
-    return newBooking.save();
+    const saved = await newBooking.save();
+
+    // Broadcast new dispatch request in real time to all online drivers
+    this.broadcastDriverDispatch({
+      type: 'new_job',
+      bookingId: saved._id.toString(),
+      bookingNumber: saved.bookingNumber,
+      service: saved.service,
+      pickup: saved.pickup,
+      destination: saved.destination,
+      fare: saved.fare,
+      passengers: saved.passengers,
+      message: `New ${saved.service.toUpperCase()} request: from ${saved.pickup?.name} to ${saved.destination?.name || 'As Directed'} (${saved.fare?.total ? '$' + (saved.fare.total / 100).toFixed(2) : ''})`,
+    });
+
+    return saved;
   }
 
   // Retrieves paginated list of bookings with optional filtering by phone, status, and service.
@@ -226,14 +269,14 @@ export class BookingsService implements OnModuleInit {
       booking = await this.bookingModel
         .findById(refOrId)
         .populate('vehicle')
-        .populate('driver', 'name phone vehicleInfo rating')
+        .populate('driver', 'name phone vehicle rating')
         .exec();
     }
     if (!booking) {
       booking = await this.bookingModel
         .findOne({ bookingNumber: refOrId.toUpperCase() })
         .populate('vehicle')
-        .populate('driver', 'name phone vehicleInfo rating')
+        .populate('driver', 'name phone vehicle rating')
         .exec();
     }
 
