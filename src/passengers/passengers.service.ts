@@ -19,7 +19,12 @@ import {
   UpdatePassengerProfileDto,
   SavePlaceDto,
 } from './dto/passenger.dto.js';
-import { hashPassword, verifyPassword } from '../admin/admin.service.js';
+import {
+  hashPassword,
+  verifyPassword,
+  parseDurationMs,
+  cleanEnvValue,
+} from '../admin/admin.service.js';
 
 export interface PassengerJwtPayload {
   sub: string;
@@ -41,12 +46,25 @@ export class PassengersService {
 
   private getJwtSecret(): string {
     return (
-      this.configService.get<string>('JWT_SECRET')?.split('#')[0].trim() ||
+      cleanEnvValue(this.configService.get('JWT_SECRET')) ||
+      cleanEnvValue(process.env.JWT_SECRET) ||
       'supersecretjwtkey_sydtransfer_2026'
     );
   }
 
-  // Issue standard Passenger JWT token valid for 30 days
+  getTokenValidity(): string {
+    return (
+      cleanEnvValue(this.configService.get('OTHER_TOKEN_VALIDITY')) ||
+      cleanEnvValue(process.env.OTHER_TOKEN_VALIDITY) ||
+      '30d'
+    );
+  }
+
+  getTokenValidityMs(): number {
+    return parseDurationMs(this.getTokenValidity(), 30 * 24 * 60 * 60 * 1000);
+  }
+
+  // Issue standard Passenger JWT token valid according to OTHER_TOKEN_VALIDITY
   generateToken(passenger: PassengerDocument): string {
     const payload: PassengerJwtPayload = {
       sub: passenger._id.toString(),
@@ -55,7 +73,9 @@ export class PassengersService {
       name: passenger.name,
       role: 'passenger',
     };
-    return jwt.sign(payload, this.getJwtSecret(), { expiresIn: '30d' });
+    return jwt.sign(payload, this.getJwtSecret(), {
+      expiresIn: this.getTokenValidity() as jwt.SignOptions['expiresIn'],
+    });
   }
 
   // Verify and decode JWT token

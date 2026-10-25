@@ -13,7 +13,12 @@ import { Driver, DriverDocument, DriverStatus } from './schemas/driver.schema.js
 import { Booking, BookingDocument } from '../bookings/schemas/booking.schema.js';
 import { BookingsService } from '../bookings/bookings.service.js';
 import { RegisterDriverDto, LoginDriverDto, UpdateDriverStatusDto } from './dto/driver.dto.js';
-import { hashPassword, verifyPassword } from '../admin/admin.service.js';
+import {
+  hashPassword,
+  verifyPassword,
+  parseDurationMs,
+  cleanEnvValue,
+} from '../admin/admin.service.js';
 
 import { Subject } from 'rxjs';
 
@@ -43,9 +48,22 @@ export class DriversService {
 
   private getJwtSecret(): string {
     return (
-      this.configService.get<string>('JWT_SECRET')?.split('#')[0].trim() ||
+      cleanEnvValue(this.configService.get('JWT_SECRET')) ||
+      cleanEnvValue(process.env.JWT_SECRET) ||
       'supersecretjwtkey_sydtransfer_2026'
     );
+  }
+
+  getTokenValidity(): string {
+    return (
+      cleanEnvValue(this.configService.get('OTHER_TOKEN_VALIDITY')) ||
+      cleanEnvValue(process.env.OTHER_TOKEN_VALIDITY) ||
+      '30d'
+    );
+  }
+
+  getTokenValidityMs(): number {
+    return parseDurationMs(this.getTokenValidity(), 30 * 24 * 60 * 60 * 1000);
   }
 
   // Register a new driver application
@@ -122,7 +140,9 @@ export class DriversService {
       role: 'driver',
     };
 
-    const token = jwt.sign(payload, this.getJwtSecret(), { expiresIn: '7d' });
+    const token = jwt.sign(payload, this.getJwtSecret(), {
+      expiresIn: this.getTokenValidity() as jwt.SignOptions['expiresIn'],
+    });
 
     return {
       success: true,

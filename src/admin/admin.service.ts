@@ -35,7 +35,7 @@ export interface AdminAuthResult {
 }
 
 // Safely strips inline comments (e.g. "# In Minutes") from .env values
-function cleanEnvValue(val?: string | number): string {
+export function cleanEnvValue(val?: string | number): string {
   if (val === undefined || val === null) return '';
   return String(val).split('#')[0].trim();
 }

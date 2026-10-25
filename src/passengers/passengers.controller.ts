@@ -9,9 +9,10 @@ import {
   Patch,
   Post,
   Req,
+  Res,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { PassengersService, PassengerJwtPayload } from './passengers.service.js';
 import {
   RegisterPassengerDto,
@@ -26,28 +27,61 @@ import {
 export class PassengersController {
   constructor(private readonly passengersService: PassengersService) {}
 
-  // Helper to extract passenger JWT from Authorization header
+  // Helper to extract passenger JWT from Authorization header or cookie
   private extractPassenger(req: Request): PassengerJwtPayload {
+    let token: string | undefined;
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies?.syd_passenger_token) {
+      token = req.cookies.syd_passenger_token;
+    }
+    if (!token) {
       throw new UnauthorizedException('Authentication token missing or malformed');
     }
-    const token = authHeader.split(' ')[1];
     return this.passengersService.verifyToken(token);
   }
 
   // POST /api/v1/passengers/register
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  async register(@Body() dto: RegisterPassengerDto) {
-    return this.passengersService.register(dto);
+  async register(
+    @Body() dto: RegisterPassengerDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.passengersService.register(dto);
+    if (result.token) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.cookie('syd_passenger_token', result.token, {
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
+        maxAge: this.passengersService.getTokenValidityMs(),
+        path: '/',
+      });
+    }
+    return result;
   }
 
   // POST /api/v1/passengers/login
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginPassengerDto) {
-    return this.passengersService.login(dto);
+  async login(
+    @Body() dto: LoginPassengerDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.passengersService.login(dto);
+    if (result.token) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.cookie('syd_passenger_token', result.token, {
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
+        maxAge: this.passengersService.getTokenValidityMs(),
+        path: '/',
+      });
+    }
+    return result;
   }
 
   // POST /api/v1/passengers/send-otp
@@ -60,8 +94,30 @@ export class PassengersController {
   // POST /api/v1/passengers/verify-otp
   @Post('verify-otp')
   @HttpCode(HttpStatus.OK)
-  async verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.passengersService.verifyOtp(dto);
+  async verifyOtp(
+    @Body() dto: VerifyOtpDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.passengersService.verifyOtp(dto);
+    if (result.token) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.cookie('syd_passenger_token', result.token, {
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
+        maxAge: this.passengersService.getTokenValidityMs(),
+        path: '/',
+      });
+    }
+    return result;
+  }
+
+  // POST /api/v1/passengers/logout
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('syd_passenger_token', { path: '/' });
+    return { success: true, message: 'Logged out successfully' };
   }
 
   // GET /api/v1/passengers/me

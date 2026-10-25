@@ -31,11 +31,16 @@ export class DriversController {
   ) {}
 
   private extractDriverFromReq(req: Request): DriverJwtPayload {
+    let token: string | undefined;
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw new UnauthorizedException('Missing or invalid Authorization header');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (req.cookies?.syd_driver_token) {
+      token = req.cookies.syd_driver_token;
     }
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+      throw new UnauthorizedException('Missing or invalid Authorization header or cookie');
+    }
     const secret =
       this.configService.get<string>('JWT_SECRET')?.split('#')[0].trim() ||
       'supersecretjwtkey_sydtransfer_2026';
@@ -102,8 +107,30 @@ export class DriversController {
   // POST /api/v1/drivers/login
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() dto: LoginDriverDto) {
-    return this.driversService.login(dto);
+  async login(
+    @Body() dto: LoginDriverDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.driversService.login(dto);
+    if (result.token) {
+      const isProduction = process.env.NODE_ENV === 'production';
+      res.cookie('syd_driver_token', result.token, {
+        httpOnly: false,
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
+        maxAge: this.driversService.getTokenValidityMs(),
+        path: '/',
+      });
+    }
+    return result;
+  }
+
+  // POST /api/v1/drivers/logout
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('syd_driver_token', { path: '/' });
+    return { success: true, message: 'Logged out successfully' };
   }
 
   // GET /api/v1/drivers/me
