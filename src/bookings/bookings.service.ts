@@ -9,6 +9,7 @@ import { isValidObjectId, Model, Types } from 'mongoose';
 import { Subject } from 'rxjs';
 import { Booking, BookingDocument } from './schemas/booking.schema.js';
 import { Vehicle, VehicleDocument } from '../vehicles/schemas/vehicle.schema.js';
+import { Passenger, PassengerDocument } from '../passengers/schemas/passenger.schema.js';
 import { QuotesService } from '../quotes/quotes.service.js';
 import { CreateBookingDto } from './dto/create-booking.dto.js';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto.js';
@@ -31,6 +32,8 @@ export class BookingsService implements OnModuleInit {
     private readonly bookingModel: Model<BookingDocument>,
     @InjectModel(Vehicle.name)
     private readonly vehicleModel: Model<VehicleDocument>,
+    @InjectModel(Passenger.name)
+    private readonly passengerModel: Model<PassengerDocument>,
     private readonly quotesService: QuotesService,
   ) {}
 
@@ -123,10 +126,22 @@ export class BookingsService implements OnModuleInit {
       exists = await this.bookingModel.exists({ bookingNumber });
     }
 
+    // 4.5 Lookup registered passenger if matches phone or email
+    let matchedPassengerId: Types.ObjectId | undefined;
+    const phone = dto.passengerPhone.trim();
+    const email = dto.passengerEmail?.trim().toLowerCase();
+    const orCond: any[] = [{ phone }];
+    if (email) orCond.push({ email });
+    const foundPassenger = await this.passengerModel.findOne({ $or: orCond }).exec();
+    if (foundPassenger) {
+      matchedPassengerId = foundPassenger._id as Types.ObjectId;
+    }
+
     // 5. Construct and Save Guest Booking
     const newBooking = new this.bookingModel({
       bookingNumber,
       service,
+      passengerId: matchedPassengerId,
       pickup: {
         name: pickup.name,
         address: pickup.address ?? '',
